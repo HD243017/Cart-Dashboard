@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Dashboard</class>
+ <widget class="QWidget" name="Dashboard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1100</width>
+    <height>650</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>스마트 물류 카트 관제 시스템 (Control Dashboard)</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+QWidget { background-color: #161622; color: #cdd6f4; font-family: "Malgun Gothic", "Segoe UI", sans-serif; }
+QFrame#frame_video, QFrame#frame_ai, QFrame#frame_sensor { background-color: #1e1e2f; border: 1px solid #2d2d48; border-radius: 8px; }
+QLabel { background-color: transparent; color: #cdd6f4; font-size: 13px; }
+QLabel#lbl_status { background-color: #a6e3a1; color: #11111b; font-weight: bold; font-size: 14px; border-radius: 6px; padding: 6px; }
+QPushButton#btn_db_log { background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 6px; padding: 6px; }
+QPushButton#btn_db_log:hover { background-color: #74c7ec; }
+   </string>
+  </property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="spacing"><number>10</number></property>
+   <property name="leftMargin"><number>12</number></property>
+   <property name="topMargin"><number>12</number></property>
+   <property name="rightMargin"><number>12</number></property>
+   <property name="bottomMargin"><number>12</number></property>
+   <item>
+    <layout class="QHBoxLayout" name="topLayout" stretch="6,4">
+     <property name="spacing"><number>10</number></property>
+     <item>
+      <layout class="QVBoxLayout" name="leftLayout" stretch="7,3">
+       <property name="spacing"><number>10</number></property>
+       <item>
+        <widget class="QFrame" name="frame_video">
+         <layout class="QVBoxLayout" name="videoLayout">
+          <item>
+           <widget class="QLabel" name="video_label">
+            <property name="font">
+             <font><family>Malgun Gothic</family><weight>75</weight><bold>true</bold></font>
+            </property>
+            <property name="text"><string>Connecting to ESP32-CAM...</string></property>
+            <property name="alignment"><set>Qt::AlignCenter</set></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="frame_ai">
+         <layout class="QVBoxLayout" name="aiLayout">
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QLabel" name="lbl_ai_title">
+            <property name="font">
+             <font><family>Malgun Gothic</family><weight>75</weight><bold>true</bold></font>
+            </property>
+            <property name="text"><string>AI 적재물 검수 결과 (FOMO)</string></property>
+            <property name="styleSheet"><string notr="true">color: #89b4fa; font-size: 15px;</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lbl_ai_nuts">
+            <property name="text"><string>• 너트 (Nut) : 0 개</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lbl_ai_bolts">
+            <property name="text"><string>• 볼트 (Bolt) : 0 개</string></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QFrame" name="frame_sensor">
+       <layout class="QVBoxLayout" name="sensorLayout">
+        <property name="spacing"><number>12</number></property>
+        <item>
+         <widget class="QLabel" name="lbl_graph_title">
+          <property name="font">
+           <font><family>Malgun Gothic</family><weight>75</weight><bold>true</bold></font>
+          </property>
+          <property name="text"><string>실시간 기울기(Pitch/Roll) 추이</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QWidget" name="graph_widget" native="true">
+          <property name="minimumSize">
+           <size><width>0</width><height>250</height></size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lbl_sensor_title">
+          <property name="font">
+           <font><family>Malgun Gothic</family><weight>75</weight><bold>true</bold></font>
+          </property>
+          <property name="text"><string>차량 주행 및 센서 현황</string></property>
+          <property name="styleSheet"><string notr="true">color: #a6e3a1; font-size: 15px;</string></property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="statusLayout" stretch="5,1">
+          <item>
+           <widget class="QLabel" name="lbl_status">
+            <property name="text"><string>현재 상태 : NORMAL (정상)</string></property>
+            <property name="alignment"><set>Qt::AlignCenter</set></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btn_db_log">
+            <property name="text"><string>DB 기록</string></property>
+            <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="lbl_yaw">
+          <property name="text"><string>• 회전값(Yaw) : 0.0 °</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lbl_speed">
+          <property name="text"><string>• 속도 : 0.0 m/s</string></property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="tiltLayout">
+          <item>
+           <widget class="QLabel" name="lbl_tilt">
+            <property name="text"><string>• 앞뒤 기울기 : 0.0 °</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lbl_tilt_side">
+            <property name="text"><string>• 옆기울기 : 0.0 °</string></property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="lbl_dist">
+          <property name="text"><string>• 장애물 거리 : 0 cm</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lbl_g">
+          <property name="text"><string>• 가속도(G) : 1.00 G</string></property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
