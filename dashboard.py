@@ -1,6 +1,7 @@
 import cv2
+import serial
 from PyQt5.QtWidgets import QWidget, QMessageBox, QVBoxLayout
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5 import uic
 import pyqtgraph as pg
@@ -28,19 +29,19 @@ class DashboardWindow(QWidget):
         # ==========================================
         # ★ 추가: 아두이노 시리얼 통신 연결
         # ==========================================
-        # self.serial_port = 'COM4' # 본인의 아두이노 포트(예: COM4, COM5)로 꼭 변경!
-        # self.baudrate = 115200
-        # try:
-        #     self.serial = serial.Serial(self.serial_port, self.baudrate, timeout=0.1)
-        #     print(f"{self.serial_port} 포트 연결 성공!")
-        # except Exception as e:
-        #     print(f"시리얼 연결 실패! 아두이노 포트를 확인해 줘: {e}")
-        #     self.serial = None
+        self.serial_port = 'COM3' # 본인의 아두이노 포트(예: COM4, COM5)로 꼭 변경!
+        self.baudrate = 115200
+        try:
+            self.serial = serial.Serial(self.serial_port, self.baudrate, timeout=0.1)
+            print(f"{self.serial_port} 포트 연결 성공!")
+        except Exception as e:
+            print(f"시리얼 연결 실패! 아두이노 포트를 확인해 줘: {e}")
+            self.serial = None
         
-        # # 4. 50ms마다 실제 패킷을 확인하는 타이머 시작
-        # self.timer = QTimer(self)
-        # self.timer.timeout.connect(self.receive_and_parse_packet) 
-        # self.timer.start(50)
+        # 4. 50ms마다 실제 패킷을 확인하는 타이머 시작
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.receive_and_parse_packet) 
+        self.timer.start(50)
 
     def init_graph(self):
         # UI 파일에 비워둔 graph_widget 안에 pyqtgraph를 채워 넣는 작업
