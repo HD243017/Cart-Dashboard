@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5 import uic
 import pyqtgraph as pg
-from videothread import VideoThread
+from videothread_capture import VideoThread
 
 # ==========================================
 # 2. 메인 관제 GUI 윈도우
@@ -29,19 +29,19 @@ class DashboardWindow(QWidget):
         # ==========================================
         # ★ 추가: 아두이노 시리얼 통신 연결
         # ==========================================
-        self.serial_port = 'COM3' # 본인의 아두이노 포트(예: COM4, COM5)로 꼭 변경!
-        self.baudrate = 115200
-        try:
-            self.serial = serial.Serial(self.serial_port, self.baudrate, timeout=0.1)
-            print(f"{self.serial_port} 포트 연결 성공!")
-        except Exception as e:
-            print(f"시리얼 연결 실패! 아두이노 포트를 확인해 줘: {e}")
-            self.serial = None
+        #self.serial_port = 'COM3' # 본인의 아두이노 포트(예: COM4, COM5)로 꼭 변경!
+        #self.baudrate = 115200
+        #try:
+        #    self.serial = serial.Serial(self.serial_port, self.baudrate, timeout=0.1)
+        #    print(f"{self.serial_port} 포트 연결 성공!")
+        #except Exception as e:
+        #    print(f"시리얼 연결 실패! 아두이노 포트를 확인해 줘: {e}")
+        #    self.serial = None
         
         # 4. 50ms마다 실제 패킷을 확인하는 타이머 시작
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.receive_and_parse_packet) 
-        self.timer.start(50)
+        #self.timer = QTimer(self)
+        #self.timer.timeout.connect(self.receive_and_parse_packet) 
+        #self.timer.start(50)
 
     def init_graph(self):
         # UI 파일에 비워둔 graph_widget 안에 pyqtgraph를 채워 넣는 작업
@@ -123,22 +123,30 @@ class DashboardWindow(QWidget):
     # 영상 프레임 업데이트 슬롯
     # ----------------------------------------------------
     def start_video_stream(self):
-        esp32_cam_url = "http://192.168.0.83:81/" 
+        esp32_cam_url = "http://192.168.0.83" 
         
         self.thread = VideoThread(esp32_cam_url)
-        self.thread.change_pixmap_signal.connect(self.update_image)
+        self.thread.data_received_signal.connect(self.update_camera_and_counts)
         self.thread.start()
 
-    def update_image(self, cv_img):
+    def update_camera_and_counts(self, cv_img, counts):
         rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
+        bytes_per_line = ch*w
         qt_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        
+
         target_w = self.video_label.width() if self.video_label.width() > 0 else 640
         target_h = self.video_label.height() if self.video_label.height() > 0 else 480
         pixmap = QPixmap.fromImage(qt_img).scaled(target_w, target_h, Qt.KeepAspectRatio)
         self.video_label.setPixmap(pixmap)
+
+        if hasattr(self, 'lbl_red'):
+            self.lbl_red.setText(f"RED LED : {counts['r1']}개")
+        if hasattr(self, 'lbl_green'):
+            self.lbl_green.setText(f"GREEN LED : {counts['g1']}개")
+        if hasattr(self, 'lbl_yellow'):
+            self.lbl_yellow.setText(f"YELLOW LED : {counts['y1']}개")
+
 
     def closeEvent(self, event):
         # 윈도우 닫힐 때 안전하게 스레드 종료
