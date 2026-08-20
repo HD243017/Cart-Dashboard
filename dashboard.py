@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5 import uic
 import pyqtgraph as pg
+from videothread_capture import VideoThread
 
 from videothread import VideoThread
 from udp_comm import UDPThread
@@ -18,7 +19,6 @@ class DashboardWindow(QWidget):
         # UI 파일 로드 같은 경로에 dashboard.ui O
         uic.loadUi("dashboard.ui", self)
         self.video_label.setScaledContents(False)
-
         
         self.init_graph() # 그래프 위젯 초기화 세팅
         self.btn_db_log.clicked.connect(self.show_db_popup) # 버튼 이벤트 연결
@@ -96,22 +96,30 @@ class DashboardWindow(QWidget):
     # 영상 프레임 업데이트 슬롯
     # ----------------------------------------------------
     def start_video_stream(self):
-        esp32_cam_url = "http://192.168.0.83:81/" 
+        esp32_cam_url = "http://192.168.0.83" 
         
         self.thread = VideoThread(esp32_cam_url)
-        self.thread.change_pixmap_signal.connect(self.update_image)
+        self.thread.data_received_signal.connect(self.update_camera_and_counts)
         self.thread.start()
 
-    def update_image(self, cv_img):
+    def update_camera_and_counts(self, cv_img, counts):
         rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
-        bytes_per_line = ch * w
+        bytes_per_line = ch*w
         qt_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        
+
         target_w = self.video_label.width() if self.video_label.width() > 0 else 640
         target_h = self.video_label.height() if self.video_label.height() > 0 else 480
         pixmap = QPixmap.fromImage(qt_img).scaled(target_w, target_h, Qt.KeepAspectRatio)
         self.video_label.setPixmap(pixmap)
+
+        if hasattr(self, 'lbl_red'):
+            self.lbl_red.setText(f"RED LED : {counts['r1']}개")
+        if hasattr(self, 'lbl_green'):
+            self.lbl_green.setText(f"GREEN LED : {counts['g1']}개")
+        if hasattr(self, 'lbl_yellow'):
+            self.lbl_yellow.setText(f"YELLOW LED : {counts['y1']}개")
+
 
     def closeEvent(self, event):
         # 윈도우 닫힐 때 안전하게 스레드 종료

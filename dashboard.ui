@@ -64,13 +64,18 @@ QPushButton#btn_db_log:hover { background-color: #74c7ec; }
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="lbl_ai_nuts">
-            <property name="text"><string>• 너트 (Nut) : 0 개</string></property>
+           <widget class="QLabel" name="lbl_red">
+            <property name="text"><string> RED LED : 0 개</string></property>
            </widget>
-          </item>
+	  </item>
+	  <item>
+	   <widget class="QLabel" name="lbl_green">
+	    <property name="text"><string> GREEN LED : 0 개</string></property>
+	   </widget>
+	  </item>
           <item>
-           <widget class="QLabel" name="lbl_ai_bolts">
-            <property name="text"><string>• 볼트 (Bolt) : 0 개</string></property>
+           <widget class="QLabel" name="lbl_yellow">
+            <property name="text"><string> YELLOW LED : 0 개</string></property>
            </widget>
           </item>
          </layout>
