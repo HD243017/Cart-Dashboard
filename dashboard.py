@@ -6,7 +6,6 @@ from PyQt5 import uic
 import pyqtgraph as pg
 from videothread_capture import VideoThread
 
-from videothread import VideoThread
 from udp_comm import UDPThread
 
 # =========
