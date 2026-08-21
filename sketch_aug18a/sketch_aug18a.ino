@@ -152,7 +152,8 @@ void setup() {
   Serial.begin(115200);
   espSerial.begin(9600); // ESP-01 펌웨어 속도에 맞춰 9600 또는 115200 설정
 
-  connect_wifi();
+  espSerial.println("CONFIG,3F_302,0424719222!!,192.168.0.162");
+  delay(1000);
 
   Wire.begin();
   Wire.beginTransmission(MPU_ADDR);
