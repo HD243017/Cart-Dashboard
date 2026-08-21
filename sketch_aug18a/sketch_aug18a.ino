@@ -65,6 +65,7 @@ void calibrate_imu() {
     Wire.endTransmission(false);
     Wire.requestFrom(MPU_ADDR, 6, true);
     
+    // I2C 통신 문제로 2번 쪼개진 통신을 16바이트로 합치기
     sum_gx += (Wire.read() << 8 | Wire.read());
     sum_gy += (Wire.read() << 8 | Wire.read());
     sum_gz += (Wire.read() << 8 | Wire.read());
@@ -97,6 +98,7 @@ void read_and_filter_imu() {
   float ay = (float)raw_ay / 8192.0;
   float az = (float)raw_az / 8192.0;
 
+  // 영점 오프셋을 빼고 각속도 변환
   float gx_rate = ((float)raw_gx - offset_gx) / 65.5;
   float gy_rate = ((float)raw_gy - offset_gy) / 65.5;
   float gz_rate = ((float)raw_gz - offset_gz) / 65.5;
@@ -104,12 +106,16 @@ void read_and_filter_imu() {
   if (abs(gz_rate) < 1.2) gz_rate = 0.0;
   yaw_angle += gz_rate * dt;
 
+  // 가속도 센서를 이용한 정적 각도 계산
   float accel_pitch = atan2(ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
   float accel_roll = atan2(ay, sqrt(ax * ax + az * az)) * 180.0 / PI;
 
+  // 상보 필터
+  // 0.96 * (이전각도 + 자이로변화량) + 0.04 * (가속도계 각도)
   pitch_angle = 0.96 * (pitch_angle + gy_rate * dt) + 0.04 * accel_pitch;
   roll_angle = 0.96 * (roll_angle + gx_rate * dt) + 0.04 * accel_roll;
   
+  // 충격량
   total_g = sqrt(ax * ax + ay * ay + az * az);
 }
 

@@ -1,4 +1,5 @@
 import cv2
+import threading
 from PyQt5.QtWidgets import QWidget, QMessageBox, QVBoxLayout
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
@@ -7,6 +8,9 @@ import pyqtgraph as pg
 from videothread_capture import VideoThread
 
 from udp_comm import UDPThread
+from db_manager import DBManager
+from alert_filter import AlertFilter
+from log_viewer import LogViewerDialog
 
 # =========
 # 메인 GUI
@@ -18,7 +22,15 @@ class DashboardWindow(QWidget):
         # UI 파일 로드 같은 경로에 dashboard.ui O
         uic.loadUi("dashboard.ui", self)
         self.video_label.setScaledContents(False)
-        
+
+        try:
+            self.db = DBManager()  # 본인 비밀번호 확인
+            self.db_connected = True
+        except Exception as e:
+            print(f"[SYSTEM] 로컬 DB 연결 실패. 기록 기능 없이 UI만 실행됩니다: {e}")
+            self.db_connected = False
+        self.alert_filter = AlertFilter()
+
         self.init_graph() # 그래프 위젯 초기화 세팅
         self.btn_db_log.clicked.connect(self.show_db_popup) # 버튼 이벤트 연결
         self.start_video_stream() # 영상 스레드 시작
@@ -44,11 +56,23 @@ class DashboardWindow(QWidget):
         self.graph_data = [0] * 100 
 
     def show_db_popup(self):
-        QMessageBox.information(self, "DB 기록 시스템", "여기에 로컬 MySQL과 연동된 물류/에러 로그 열람창이 뜰 예정!")
+        if not getattr(self, 'db_connected', False): 
+            QMessageBox.warning(self, "경고", "DB 모듈이 연결되지 않은 테스트 모드입니다.")
+            return
+
+        logs = self.db.fetch_recent_alerts(limit=100)
+        if not logs:
+            QMessageBox.information(self, "알림", "기록된 로그 데이터가 없습니다.")
+            return
+
+        dialog = LogViewerDialog(logs, self)
+        dialog.exec_()
 
 
     def route_packet(self, raw_data):
         # 패킷 예시: [헤더,데이터,데이터,...,데이터,상태]
+        if not raw_data:
+            return
         parts = raw_data.split(',')
         if not parts:
             return
@@ -86,6 +110,22 @@ class DashboardWindow(QWidget):
         else:
             self.lbl_status.setText(f"경고 : 🚨 {status}")
             self.lbl_status.setStyleSheet("background-color: #f38ba8; color: #11111b; font-weight: bold; border-radius: 6px; padding: 6px;")
+
+
+        if getattr(self, 'db_connected', False):
+            try:
+                alert_event = self.alert_filter.evaluate_imu(pitch, roll, g_val)
+                if alert_event: 
+                    #데몬 스레드로 비동기 처리
+                    threading.Thread(
+                        target=self.db.insert_driving_alert,
+                        args=(alert_event, pitch, roll, g_val, None),
+                        daemon=True
+                    ).start()
+
+            except Exception as e:
+                print(f"[DB 저장 에러]: {e}")
+
 
         # 실시간 그래프 업데이트 (메모(JYJ): roll 이외에 옆으로 기우는 상황 고려하여 다시 코드 작성 필요)
         self.graph_data = self.graph_data[1:] + [roll]
