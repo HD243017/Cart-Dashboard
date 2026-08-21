@@ -6,7 +6,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 class VideoThread(QThread):
     # (이미지 프레임, LED 감지 결과 dict) 시그널 전송
-    data_received_signal = pyqtSignal(np.ndarray, dict)
+    data_received_signal = pyqtSignal(np.ndarray, dict, list)
 
     def __init__(self, base_url="http://192.168.0.83"):
         super().__init__()
@@ -33,20 +33,21 @@ class VideoThread(QThread):
                     detections = data_resp.json()
                     counts = {'r1': 0, 'g1': 0, 'y1': 0}
                     
+                    valid_detections = []
+
                     for item in detections:
                         label = item.get('label')
                         score = item.get('value', 0.0)
                         if score >= 0.75 and label in counts:
+                            valid_detections.append(item)
                             counts[label] += 1
 
                     if cv_img is not None:
-                        self.data_received_signal.emit(cv_img, counts)
+                        self.data_received_signal.emit(cv_img, counts, valid_detections)
 
             except Exception as e:
-                # 네트워크 일시 끊김 또는 요청 지연 시 무시
                 pass
 
-            # 5초 간격 요청
             for _ in range(50):
                 if not self.running:
                     break

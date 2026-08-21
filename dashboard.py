@@ -141,7 +141,43 @@ class DashboardWindow(QWidget):
         self.thread.data_received_signal.connect(self.update_camera_and_counts)
         self.thread.start()
 
-    def update_camera_and_counts(self, cv_img, counts):
+    def update_camera_and_counts(self, cv_img, counts, detections=None):
+        color_map = {
+            'r1': (0, 0, 255),    
+            'g1': (0, 255, 0),    
+            'y1': (0, 215, 255)   
+        }
+        label_name_map = {
+            'r1': 'red',
+            'g1': 'green',
+            'y1': 'yellow'
+        }
+
+        if detections:
+            img_h, img_w = cv_img.shape[:2]
+            scale_x = img_w / 96.0  
+            scale_y = img_h / 96.0
+            box_size = 24
+
+            for item in detections:
+                label = item.get('label', '')
+                score = item.get('value', 0.0)
+                cx = int(item.get('x', 0) * scale_x)
+                cy = int(item.get('y', 0) * scale_y)
+
+                color = color_map.get(label, (255, 255, 0))
+                display_name = label_name_map.get(label, label)
+
+                x1 = max(0, int(cx - box_size / 2))
+                y1 = max(0, int(cy - box_size / 2))
+                x2 = min(img_w, int(cx + box_size / 2))
+                y2 = min(img_h, int(cy + box_size / 2))
+
+                cv2.rectangle(cv_img, (x1, y1), (x2, y2), color, 2)
+                text = f"{display_name} ({score:.2f})"
+                cv2.putText(cv_img, text, (x1, max(15, y1 - 5)), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
+
         rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
         bytes_per_line = ch*w
