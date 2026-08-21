@@ -34,12 +34,10 @@ class DashboardWindow(QWidget):
         self.init_graph() # 그래프 위젯 초기화 세팅
         self.btn_db_log.clicked.connect(self.show_db_popup) # 버튼 이벤트 연결
         self.start_video_stream() # 영상 스레드 시작
-
         # UDP 스레드 연결 및 실행
         self.udp_thread = UDPThread(ip="0.0.0.0", port=5000)
         self.udp_thread.packet_received.connect(self.route_packet) # 통신 스레드에서 데이터 수신시 UI업데이트 함수 실행하도록 연결
         self.udp_thread.start()
-
     def init_graph(self):
         self.graph_layout = QVBoxLayout(self.graph_widget) # UI 파일에 비워둔 graph_widget 안에 pyqtgraph를 채워 넣는 작업
         self.graph_layout.setContentsMargins(0, 0, 0, 0) # 여백 제거
@@ -152,7 +150,6 @@ class DashboardWindow(QWidget):
             'g1': 'green',
             'y1': 'yellow'
         }
-
         if detections:
             img_h, img_w = cv_img.shape[:2]
             scale_x = img_w / 96.0  
@@ -182,20 +179,17 @@ class DashboardWindow(QWidget):
         h, w, ch = rgb_image.shape
         bytes_per_line = ch*w
         qt_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-
+        
         target_w = self.video_label.width() if self.video_label.width() > 0 else 640
         target_h = self.video_label.height() if self.video_label.height() > 0 else 480
         pixmap = QPixmap.fromImage(qt_img).scaled(target_w, target_h, Qt.KeepAspectRatio)
         self.video_label.setPixmap(pixmap)
-
         if hasattr(self, 'lbl_red'):
             self.lbl_red.setText(f"RED LED : {counts['r1']}개")
         if hasattr(self, 'lbl_green'):
             self.lbl_green.setText(f"GREEN LED : {counts['g1']}개")
         if hasattr(self, 'lbl_yellow'):
             self.lbl_yellow.setText(f"YELLOW LED : {counts['y1']}개")
-
-
     def closeEvent(self, event):
         # 윈도우 닫힐 때 안전하게 스레드 종료
         if hasattr(self, 'thread') and self.thread.isRunning():

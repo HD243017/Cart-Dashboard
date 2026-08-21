@@ -8,50 +8,57 @@ class VideoThread(QThread):
     # (이미지 프레임, LED 감지 결과 dict) 시그널 전송
     data_received_signal = pyqtSignal(np.ndarray, dict, list)
 
-    def __init__(self, base_url="http://192.168.0.83"):
+    def __init__(self, base_url="http://192.168.0.83", interval=2.0):
         super().__init__()
         self.base_url = base_url.rstrip('/')
+        self.interval = interval
         self.running = True
 
     def run(self):
-        while self.running:
-            try:
+        with requests.Session() as session:
+            while self.running:
+                loop_start = time.time()
+                try:
                 # 1. 캡처된 이미지 가져오기
-                img_url = f"{self.base_url}/image?t={int(time.time() * 1000)}"
-                img_resp = requests.get(img_url, timeout=3)
+                    img_url = f"{self.base_url}/image?t={int(time.time() * 1000)}"
+                    img_resp = requests.get(img_url, timeout=2.0)
                 
                 # 2. 감지 데이터(JSON) 가져오기
-                data_url = f"{self.base_url}/data"
-                data_resp = requests.get(data_url, timeout=3)
+                    data_url = f"{self.base_url}/data"
+                    data_resp = requests.get(data_url, timeout=2.0)
 
-                if img_resp.status_code == 200 and data_resp.status_code == 200:
+                    if img_resp.status_code == 200 and data_resp.status_code == 200:
                     # JPEG -> OpenCV BGR Image 변환
-                    img_array = np.frombuffer(img_resp.content, dtype=np.uint8)
-                    cv_img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                        img_array = np.frombuffer(img_resp.content, dtype=np.uint8)
+                        cv_img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
                     # Score 0.9 이상인 객체별 카운팅
-                    detections = data_resp.json()
-                    counts = {'r1': 0, 'g1': 0, 'y1': 0}
+                        detections = data_resp.json()
+                        counts = {'r1': 0, 'g1': 0, 'y1': 0}
                     
-                    valid_detections = []
+                        valid_detections = []
 
-                    for item in detections:
-                        label = item.get('label')
-                        score = item.get('value', 0.0)
-                        if score >= 0.75 and label in counts:
-                            valid_detections.append(item)
-                            counts[label] += 1
+                        for item in detections:
+                            label = item.get('label')
+                            score = item.get('value', 0.0)
+                            if score >= 0.75 and label in counts:
+                                valid_detections.append(item)
+                                counts[label] += 1
 
-                    if cv_img is not None:
-                        self.data_received_signal.emit(cv_img, counts, valid_detections)
+                        if cv_img is not None:
+                            self.data_received_signal.emit(cv_img, counts, valid_detections)
 
-            except Exception as e:
-                pass
+                except Exception as e:
+                    print(f"[VideoThread Error]: {e}")
 
-            for _ in range(50):
-                if not self.running:
-                    break
-                time.sleep(0.1)
+                elapsed = time.time() - loop_start
+                sleep_time = max(0.0, self.interval - elapsed)
+
+                step = 0.05
+                while sleep_time > 0 and self.running:
+                    time.sleep(min(step, sleep_time))
+                    sleep_time -= step
+
 
     def stop(self):
         self.running = False
