@@ -116,6 +116,7 @@ class DashboardWindow(QWidget):
             try:
                 alert_event = self.alert_filter.evaluate_imu(pitch, roll, g_val)
                 if alert_event: 
+                    #데몬 스레드로 비동기 처리
                     threading.Thread(
                         target=self.db.insert_driving_alert,
                         args=(alert_event, pitch, roll, g_val, None),
