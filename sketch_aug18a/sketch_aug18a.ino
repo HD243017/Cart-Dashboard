@@ -112,7 +112,7 @@ void read_and_filter_imu() {
 
   // 상보 필터
   // 0.96 * (이전각도 + 자이로변화량) + 0.04 * (가속도계 각도)
-  pitch_angle = 0.96 * (pitch_angle + gy_rate * dt) + 0.04 * accel_pitch;
+  pitch_angle = 0.96 * (pitch_angle - gy_rate * dt) + 0.04 * accel_pitch;
   roll_angle = 0.96 * (roll_angle + gx_rate * dt) + 0.04 * accel_roll;
   
   // 충격량
@@ -176,12 +176,11 @@ void setup() {
 }
 
 void loop() {
+  read_and_filter_imu();
   unsigned long current_time = millis();
-  
   if (current_time - last_send_time >= PACKET_INTERVAL_MS) {
-    read_and_filter_imu();
-    check_safety_status();
     send_cart_packet();
+    check_safety_status();
     
     last_send_time = current_time;
   }
