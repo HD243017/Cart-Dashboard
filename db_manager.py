@@ -32,7 +32,7 @@ class DBManager:
         except Exception as e:
             print(f"[DB ERROR] 기록 실패: {e}")
 
-    def fetch_recent_alerts(self, limit=10):
+    def fetch_recent_alerts(self, limit=100):
         # 최근 기록된 N개의 경고 로그 조회
         sql = """
         SELECT log_id, warning_type, pitch, roll, g_force, ultrasonic_distance, created_at

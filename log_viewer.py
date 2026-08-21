@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt
 class LogViewerDialog(QDialog):
     def __init__(self, logs, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("최근 돌발상황 및 경고 로그 (최근 10건)")
+        self.setWindowTitle("최근 돌발상황 및 경고 로그")
         self.resize(750, 380)
 
         layout = QVBoxLayout(self)

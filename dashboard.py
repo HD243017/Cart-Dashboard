@@ -30,7 +30,7 @@ class DashboardWindow(QWidget):
             print(f"[SYSTEM] 로컬 DB 연결 실패. 기록 기능 없이 UI만 실행됩니다: {e}")
             self.db_connected = False
         self.alert_filter = AlertFilter()
-        
+
         self.init_graph() # 그래프 위젯 초기화 세팅
         self.btn_db_log.clicked.connect(self.show_db_popup) # 버튼 이벤트 연결
         self.start_video_stream() # 영상 스레드 시작
@@ -60,7 +60,7 @@ class DashboardWindow(QWidget):
             QMessageBox.warning(self, "경고", "DB 모듈이 연결되지 않은 테스트 모드입니다.")
             return
 
-        logs = self.db.fetch_recent_alerts(limit=10)
+        logs = self.db.fetch_recent_alerts(limit=100)
         if not logs:
             QMessageBox.information(self, "알림", "기록된 로그 데이터가 없습니다.")
             return
