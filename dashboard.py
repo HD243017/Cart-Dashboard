@@ -39,12 +39,10 @@ class DashboardWindow(QWidget):
         self.init_graph() # 그래프 위젯 초기화 세팅
         self.btn_db_log.clicked.connect(self.show_db_popup) # 버튼 이벤트 연결
         self.start_video_stream() # 영상 스레드 시작
-
         # UDP 스레드 연결 및 실행
         self.udp_thread = UDPThread(ip="0.0.0.0", port=5000)
         self.udp_thread.packet_received.connect(self.route_packet) # 통신 스레드에서 데이터 수신시 UI업데이트 함수 실행하도록 연결
         self.udp_thread.start()
-
     def init_graph(self):
         self.graph_layout = QVBoxLayout(self.graph_widget) # UI 파일에 비워둔 graph_widget 안에 pyqtgraph를 채워 넣는 작업
         self.graph_layout.setContentsMargins(0, 0, 0, 0) # 여백 제거
@@ -205,24 +203,58 @@ class DashboardWindow(QWidget):
         self.thread.data_received_signal.connect(self.update_camera_and_counts)
         self.thread.start()
 
-    def update_camera_and_counts(self, cv_img, counts):
+    def update_camera_and_counts(self, cv_img, counts, detections=None):
+        color_map = {
+            'r1': (0, 0, 255),    
+            'g1': (0, 255, 0),    
+            'y1': (0, 215, 255)   
+        }
+        label_name_map = {
+            'r1': 'red',
+            'g1': 'green',
+            'y1': 'yellow'
+        }
+        if detections:
+            img_h, img_w = cv_img.shape[:2]
+            scale_x = img_w / 96.0  
+            scale_y = img_h / 96.0
+            box_size = 24
+
+            for item in detections:
+                label = item.get('label', '')
+                score = item.get('value', 0.0)
+                cx = int(item.get('x', 0) * scale_x)
+                cy = int(item.get('y', 0) * scale_y)
+
+                color = color_map.get(label, (255, 255, 0))
+                display_name = label_name_map.get(label, label)
+
+                x1 = max(0, int(cx - box_size / 2))
+                y1 = max(0, int(cy - box_size / 2))
+                x2 = min(img_w, int(cx + box_size / 2))
+                y2 = min(img_h, int(cy + box_size / 2))
+
+                cv2.rectangle(cv_img, (x1, y1), (x2, y2), color, 2)
+                text = f"{display_name} ({score:.2f})"
+                cv2.putText(cv_img, text, (x1, max(15, y1 - 5)), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
+
         rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
         bytes_per_line = ch*w
         qt_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-
+        
         target_w = self.video_label.width() if self.video_label.width() > 0 else 640
         target_h = self.video_label.height() if self.video_label.height() > 0 else 480
         pixmap = QPixmap.fromImage(qt_img).scaled(target_w, target_h, Qt.KeepAspectRatio)
         self.video_label.setPixmap(pixmap)
-
         if hasattr(self, 'lbl_red'):
             self.lbl_red.setText(f"RED LED : {counts['r1']}개")
         if hasattr(self, 'lbl_green'):
             self.lbl_green.setText(f"GREEN LED : {counts['g1']}개")
         if hasattr(self, 'lbl_yellow'):
             self.lbl_yellow.setText(f"YELLOW LED : {counts['y1']}개")
-
+            
         # 배송 중(상태 1)일 때만 물건 개수 변화 감지
         if hasattr(self, 'prev_button_state') and self.prev_button_state == '1':
             # 이전 카운트와 현재 카메라 카운트 다른경우
@@ -242,7 +274,6 @@ class DashboardWindow(QWidget):
         # 항상 최신 카운트 개수 업데이트 - 배송 중이 아닐 때도 현재 개수는 파악하고 있어야 시작할 때 기록 가능
         if hasattr(self, 'current_counts'):
             self.current_counts = counts.copy()
-
 
     def closeEvent(self, event):
         # 윈도우 닫힐 때 안전하게 스레드 종료
