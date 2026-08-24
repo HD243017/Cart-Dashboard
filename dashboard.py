@@ -1,16 +1,17 @@
-import cv2
 import threading
 from PyQt5.QtWidgets import QWidget, QMessageBox, QVBoxLayout
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5 import uic
 import pyqtgraph as pg
-from videothread_capture import VideoThread
 
 from udp_comm import UDPThread
 from db_manager import DBManager
 from alert_filter import AlertFilter
 from log_viewer import LogViewerDialog
+from delivery_service import DeliveryService
+import video_overlay
+from camera_manager import CameraManager
 
 # =========
 # 메인 GUI
@@ -26,23 +27,26 @@ class DashboardWindow(QWidget):
         try:
             self.db = DBManager()  # 본인 비밀번호 확인
             self.db_connected = True
-            self.prev_button_state = '0'
-            self.current_order_id = None
-            self.current_counts = {'r1': 0, 'g1': 0, 'y1': 0}
-            self.start_counts = {'r1': 0, 'g1': 0, 'y1': 0}
-
         except Exception as e:
             print(f"[SYSTEM] 로컬 DB 연결 실패. 기록 기능 없이 UI만 실행됩니다: {e}")
+            self.db = None
             self.db_connected = False
+
+        self.delivery_svc = DeliveryService(self.db if self.db_connected else None)
         self.alert_filter = AlertFilter()
 
-        self.init_graph() # 그래프 위젯 초기화 세팅
+        self.init_graph()
         self.btn_db_log.clicked.connect(self.show_db_popup) # 버튼 이벤트 연결
-        self.start_video_stream() # 영상 스레드 시작
+        
+        self.camera_mgr = CameraManager("http://192.168.0.83", parent=self)
+        self.camera_mgr.frame_processed.connect(self.on_frame_received)
+        self.camera_mgr.start()
+
         # UDP 스레드 연결 및 실행
         self.udp_thread = UDPThread(ip="0.0.0.0", port=5000)
         self.udp_thread.packet_received.connect(self.route_packet) # 통신 스레드에서 데이터 수신시 UI업데이트 함수 실행하도록 연결
         self.udp_thread.start()
+
     def init_graph(self):
         self.graph_layout = QVBoxLayout(self.graph_widget) # UI 파일에 비워둔 graph_widget 안에 pyqtgraph를 채워 넣는 작업
         self.graph_layout.setContentsMargins(0, 0, 0, 0) # 여백 제거
@@ -102,7 +106,7 @@ class DashboardWindow(QWidget):
                 status = parts[5].strip()
                 button_state = parts[-1].strip()
 
-                self.process_delivery_state(button_state)
+                self.delivery_svc.process_button_state(button_state)
 
                 self.update_imu_data(yaw, pitch, roll, g_val, status)
             except ValueError:
@@ -110,48 +114,6 @@ class DashboardWindow(QWidget):
 
         # 이 장소에 elif 문으로 각각의 헤더를 추가하시기 바랍니다.
         # 추가될 영상 및 이미지는 TCP방식이 맞다고 보여지기에 따로 해주시기 바랍니다.
-
-
-    def process_delivery_state(self, current_state):
-        # [0 -> 1] 배송 시작 감지
-        if current_state == '1' and self.prev_button_state == '0':
-            print("[SYSTEM] 배송 시작")
-            # 시작 개수 고정
-            self.start_counts = self.current_counts.copy() 
-            
-            if getattr(self, 'db_connected', False):
-                # DB 기록, 발급된 order_id를 변수에 저장
-                self.current_order_id = self.db.start_new_order(
-                    self.start_counts['r1'], 
-                    self.start_counts['g1'], 
-                    self.start_counts['y1']
-                )
-
-        # [1 -> 0] 배송 종료 감지
-        elif current_state == '0' and self.prev_button_state == '1':
-            print("[SYSTEM] 배송이 종료되었습니다.")
-            if getattr(self, 'db_connected', False) and self.current_order_id is not None:
-                # 최종 현재 개수
-                end_counts = self.current_counts
-                
-                # 누락 여부 판별 로직 (시작 개수와 종료 개수 비교)
-                if (end_counts['r1'] == self.start_counts['r1'] and
-                    end_counts['g1'] == self.start_counts['g1'] and
-                    end_counts['y1'] == self.start_counts['y1']):
-                    final_status = 'COMPLETED'  # 정상 완료
-                else:
-                    final_status = 'MISSING'    # 누락 발생
-                    
-                # DB에 종료 기록 업데이트
-                self.db.update_order_end(
-                    self.current_order_id,
-                    end_counts['r1'], end_counts['g1'], end_counts['y1'],
-                    final_status
-                )
-                self.current_order_id = None # 다음 배송을 위해 초기화
-
-        # 현재 상태를 이전 상태로 업데이트 (0->0, 1->1 연속 신호 시엔 위 조건문을 타지 않고 이 줄만 실행됨)
-        self.prev_button_state = current_state 
 
     # ===========
     # UI 업데이트
@@ -171,7 +133,7 @@ class DashboardWindow(QWidget):
                 self.lbl_status.setStyleSheet("background-color: #f38ba8; color: #11111b; font-weight: bold; border-radius: 6px; padding: 6px;")
 
 
-        if getattr(self, 'db_connected', False):
+        if self.db_connected:
             try:
                 alert_event = self.alert_filter.evaluate_imu(pitch, roll, g_val)
                 if alert_event: 
@@ -196,90 +158,25 @@ class DashboardWindow(QWidget):
     # ----------------------------------------------------
     # 영상 프레임 업데이트 슬롯
     # ----------------------------------------------------
-    def start_video_stream(self):
-        esp32_cam_url = "http://192.168.0.83" 
-        
-        self.thread = VideoThread(esp32_cam_url)
-        self.thread.data_received_signal.connect(self.update_camera_and_counts)
-        self.thread.start()
+    def on_frame_received(self, pixmap, counts):
+        # 1. 배송 상태 관리자에게 수량 전달 (변동 시 백그라운드 DB 저장)
+        self.delivery_svc.update_vision_counts(counts)
 
-    def update_camera_and_counts(self, cv_img, counts, detections=None):
-        color_map = {
-            'r1': (0, 0, 255),    
-            'g1': (0, 255, 0),    
-            'y1': (0, 215, 255)   
-        }
-        label_name_map = {
-            'r1': 'red',
-            'g1': 'green',
-            'y1': 'yellow'
-        }
-        if detections:
-            img_h, img_w = cv_img.shape[:2]
-            scale_x = img_w / 96.0  
-            scale_y = img_h / 96.0
-            box_size = 24
-
-            for item in detections:
-                label = item.get('label', '')
-                score = item.get('value', 0.0)
-                cx = int(item.get('x', 0) * scale_x)
-                cy = int(item.get('y', 0) * scale_y)
-
-                color = color_map.get(label, (255, 255, 0))
-                display_name = label_name_map.get(label, label)
-
-                x1 = max(0, int(cx - box_size / 2))
-                y1 = max(0, int(cy - box_size / 2))
-                x2 = min(img_w, int(cx + box_size / 2))
-                y2 = min(img_h, int(cy + box_size / 2))
-
-                cv2.rectangle(cv_img, (x1, y1), (x2, y2), color, 2)
-                text = f"{display_name} ({score:.2f})"
-                cv2.putText(cv_img, text, (x1, max(15, y1 - 5)), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
-
-        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb_image.shape
-        bytes_per_line = ch*w
-        qt_img = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        
-        target_w = self.video_label.width() if self.video_label.width() > 0 else 640
-        target_h = self.video_label.height() if self.video_label.height() > 0 else 480
-        pixmap = QPixmap.fromImage(qt_img).scaled(target_w, target_h, Qt.KeepAspectRatio)
+        # 2. 영상 화면 출력
         self.video_label.setPixmap(pixmap)
+
+        # 3. LED 라벨 텍스트 갱신
         if hasattr(self, 'lbl_red'):
-            self.lbl_red.setText(f"RED LED : {counts['r1']}개")
+            self.lbl_red.setText(f"RED LED : {counts.get('r1', 0)}개")
         if hasattr(self, 'lbl_green'):
-            self.lbl_green.setText(f"GREEN LED : {counts['g1']}개")
+            self.lbl_green.setText(f"GREEN LED : {counts.get('g1', 0)}개")
         if hasattr(self, 'lbl_yellow'):
-            self.lbl_yellow.setText(f"YELLOW LED : {counts['y1']}개")
-            
-        # 배송 중(상태 1)일 때만 물건 개수 변화 감지
-        if hasattr(self, 'prev_button_state') and self.prev_button_state == '1':
-            # 이전 카운트와 현재 카메라 카운트 다른경우
-            if (counts['r1'] != self.current_counts.get('r1', 0) or
-                counts['g1'] != self.current_counts.get('g1', 0) or
-                counts['y1'] != self.current_counts.get('y1', 0)):
-                
-                print(f"[SYSTEM] 수량 변화 {counts}")
-                # DB에 변화된 로그 기록 (비동기 처리 영상 끊김 방지)
-                if getattr(self, 'db_connected', False) and getattr(self, 'current_order_id', None):
-                    threading.Thread(
-                        target=self.db.insert_order_log,
-                        args=(self.current_order_id, counts['r1'], counts['g1'], counts['y1']),
-                        daemon=True
-                    ).start()
-        
-        # 항상 최신 카운트 개수 업데이트 - 배송 중이 아닐 때도 현재 개수는 파악하고 있어야 시작할 때 기록 가능
-        if hasattr(self, 'current_counts'):
-            self.current_counts = counts.copy()
+            self.lbl_yellow.setText(f"YELLOW LED : {counts.get('y1', 0)}개")
 
     def closeEvent(self, event):
         # 윈도우 닫힐 때 안전하게 스레드 종료
-        if hasattr(self, 'thread') and self.thread.isRunning():
-            self.thread.stop()
-            self.thread.wait()
+        if hasattr(self, 'camera_mgr'):
+            self.camera_mgr.stop()
         if hasattr(self, 'udp_thread') and self.udp_thread.isRunning():
             self.udp_thread.stop()
             self.udp_thread.wait()
