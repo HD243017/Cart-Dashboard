@@ -5,13 +5,13 @@ from PyQt5.QtGui import QImage, QPixmap
 from PyQt5 import uic
 import pyqtgraph as pg
 
-from udp_comm import UDPThread
-from db_manager import DBManager
-from alert_filter import AlertFilter
-from log_viewer import LogViewerDialog
-from delivery_service import DeliveryService
-import video_overlay
-from camera_manager import CameraManager
+from src.communication.udp_comm import UDPThread
+from src.database.db_manager import DBManager
+from src.core.alert_filter import AlertFilter
+from src.gui.log_viewer import LogViewerDialog
+from src.core.delivery_service import DeliveryService
+from src.gui import video_overlay
+from src.communication.camera_manager import CameraManager
 
 # =========
 # 메인 GUI
@@ -21,7 +21,7 @@ class DashboardWindow(QWidget):
         super().__init__()
         
         # UI 파일 로드 같은 경로에 dashboard.ui O
-        uic.loadUi("dashboard.ui", self)
+        uic.loadUi("src\gui\dashboard.ui", self)
         self.video_label.setScaledContents(False)
 
         try:

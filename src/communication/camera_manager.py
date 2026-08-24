@@ -1,7 +1,7 @@
 # camera_manager.py
 from PyQt5.QtCore import QObject, pyqtSignal
-from videothread_capture import VideoThread
-import video_overlay
+from src.communication.videothread_capture import VideoThread
+from src.gui import video_overlay
 
 class CameraManager(QObject):
     # UI로 보낼 시그널: (완성된 QPixmap, 카운트 딕셔너리)
