@@ -30,12 +30,12 @@ float target_yaw = 0.0;
 const unsigned long MPU_INTERVAL = 20;
 unsigned long last_mpu_time = 0;
 
-// 직진 보정 설정
-const float YAW_KP = 8.5;
-const float YAW_DEADBAND = 0.5;
-
-// 최대 보정값
-const int MAX_YAW_CORRECTION = 90;
+// ==================================================
+// 직진 보정 설정 (반응성 강화 파라미터 반영)
+// ==================================================
+const float YAW_KP = 8.5;             // 5.0 -> 8.5 (오차 대응 반응속도 향상)
+const float YAW_DEADBAND = 0.5;       // 1.0 -> 0.5 (미세한 틀어짐부터 빠른 개입)
+const int MAX_YAW_CORRECTION = 90;   // 60 -> 90 (모터 출력차 상한 확대)
 
 // ==================================================
 // 모터 핀
@@ -649,7 +649,8 @@ void update_mpu6050()
 
   float gz_rate = ((float)gz - gyro_offset_z) / 65.5;
 
-  if (abs(gz_rate) < 1.2) gz_rate = 0.0;
+  // 노이즈 컷 유효 범위를 1.2 -> 0.5로 낮추어 미세한 틀어짐 누적 정밀도 향상
+  if (abs(gz_rate) < 0.5) gz_rate = 0.0;
 
   yaw_angle += gz_rate * dt;
 
@@ -658,7 +659,7 @@ void update_mpu6050()
 }
 
 // ==================================================
-// 직진 방향 보정 (수정 완료)
+// 직진 방향 보정
 // ==================================================
 void correct_forward_direction()
 {
@@ -676,18 +677,14 @@ void correct_forward_direction()
   int correction = (int)(YAW_KP * yaw_error);
   correction = constrain(correction, -MAX_YAW_CORRECTION, MAX_YAW_CORRECTION);
 
-  int left_speed;
-  int right_speed;
+  int left_speed = speed + correction;
+  int right_speed = speed - correction;
 
-  // 보정 제어 방향 교정 (오른쪽으로 틀어지면 왼쪽 모터 증가 / 오른쪽 감소)
-  left_speed = speed + correction;
-  right_speed = speed - correction;
-
-  // MIN_SPEED(80) 이하로 안 떨어지게 제한하여 모터 멈춤 현상 방지
+  // MIN_SPEED(80) 이하로 안 떨어지게 제한하여 한쪽 모터 멈춤 현상 방지
   left_speed = constrain(left_speed, MIN_SPEED, MAX_SPEED);
   right_speed = constrain(right_speed, MIN_SPEED, MAX_SPEED);
 
-  // 전진 핀 방향 고정 (forward 함수와 일치)
+  // 전진 핀 방향 고정
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, HIGH);
   digitalWrite(IN3, LOW);
