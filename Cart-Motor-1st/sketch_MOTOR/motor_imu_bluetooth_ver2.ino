@@ -31,11 +31,11 @@ const unsigned long MPU_INTERVAL = 20;
 unsigned long last_mpu_time = 0;
 
 // 직진 보정 설정
-const float YAW_KP = 3.0;
-const float YAW_DEADBAND = 2.0;
+const float YAW_KP = 8.5;
+const float YAW_DEADBAND = 0.5;
 
 // 최대 보정값
-const int MAX_YAW_CORRECTION = 60;
+const int MAX_YAW_CORRECTION = 90;
 
 // ==================================================
 // 모터 핀
