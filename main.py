@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QApplication
-from dashboard import DashboardWindow
+from src.gui.dashboard import DashboardWindow
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
