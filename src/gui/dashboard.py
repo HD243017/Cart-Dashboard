@@ -1,3 +1,5 @@
+import math
+import time
 import threading
 from PyQt5.QtWidgets import QWidget, QMessageBox, QVBoxLayout
 from PyQt5.QtCore import Qt, QTimer
@@ -155,7 +157,7 @@ class DashboardWindow(QWidget):
 
         self.timer_3d = QTimer(self)
         self.timer_3d.timeout.connect(self.sync_3d_viewer)
-        self.timer_3d.start(33) # 약 30 FPS로 3D 뷰어만 따로 업데이트
+        self.timer_3d.start(33) # 30FPS로 3D 뷰어 업데이트
 
     def init_graph(self):
         graph_layout = QVBoxLayout(self.graph_widget)
