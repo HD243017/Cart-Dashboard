@@ -78,6 +78,7 @@ int speed = 0;
 // ==================================================
 enum Motion { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 Motion current_motion = STOP;
+int driving_state = 0;                                  // 중요: 버튼 할당하고 배송 시작과 끝 상태 변수 수정 필요
 
 // ==================================================
 // 방향 전환 상태
@@ -168,12 +169,14 @@ void check_safety_status() {
 // ==========================================
 void send_cart_packet() {
   // 5가지 데이터를 쉼표로 연결
-  String packet = "imu," +
+  String packet = "car," +
                   String(yaw_angle, 1) + "," + 
                   String(pitch_angle, 1) + "," + 
                   String(roll_angle, 1) + "," + 
                   String(total_g, 2) + "," + 
-                  cart_status + ",0";
+                  cart_status + "," +
+                  String(distance) + "," +
+                  String(driving_state);
 
   // ESP-01로 단순 전송 (끝에 줄바꿈 \n 포함)
   espSerial.println(packet);

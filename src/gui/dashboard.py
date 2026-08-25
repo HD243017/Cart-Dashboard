@@ -97,32 +97,31 @@ class DashboardWindow(QWidget):
         header = parts[0].lower() # 소문자로 변환
 
         # 헤더 분기
-        if header == 'imu' and len(parts) >= 6:
+        if header == 'car' and len(parts) >= 8:
             try:
                 yaw = float(parts[1])
                 pitch = float(parts[2])
                 roll = float(parts[3])
                 g_val = float(parts[4])
                 status = parts[5].strip()
-                # button_state = parts[-1].strip()
+                distance = int(parts[6].strip())
+                button_state = parts[-1].strip()
 
                 # self.delivery_svc.process_button_state(button_state)
 
-                self.update_imu_data(yaw, pitch, roll, g_val, status)
+                self.update_data(yaw, pitch, roll, g_val, distance, status)
             except ValueError:
                 pass
-
-        # 이 장소에 elif 문으로 각각의 헤더를 추가하시기 바랍니다.
-        # 추가될 영상 및 이미지는 TCP방식이 맞다고 보여지기에 따로 해주시기 바랍니다.
 
     # ===========
     # UI 업데이트
     # ===========
-    def update_imu_data(self, yaw, pitch, roll, g_val, status):
+    def update_data(self, yaw, pitch, roll, g_val, distance, status):
         self.lbl_yaw.setText(f"• 회전값(Yaw) : {yaw:.1f} °")
         self.lbl_tilt.setText(f"• 앞뒤 기울기 : {pitch:.1f} °")
         self.lbl_tilt_side.setText(f"• 옆기울기 : {roll:.1f} °")
         self.lbl_g.setText(f"• 가속도(G) : {g_val:.2f} G")
+        self.lbl_dist.setText(f"• 초음파 거리 : {distance}")
 
         if getattr(self, 'prev_status', "") != status:
             if status == "NORMAL":
@@ -140,7 +139,7 @@ class DashboardWindow(QWidget):
                     #데몬 스레드로 비동기 처리
                     threading.Thread(
                         target=self.db.insert_driving_alert,
-                        args=(alert_event, pitch, roll, g_val, None),
+                        args=(alert_event, pitch, roll, g_val, distance),
                         daemon=True
                     ).start()
 
