@@ -102,9 +102,10 @@ class Cart3DViewer(QWidget):
             item.translate(0, 0, 1.0)
             
             # 3. Euler 각도 회전 적용 (Yaw -> Pitch -> Roll 순서)
-            item.rotate(float(yaw), 0, 0, 1)    # Yaw (Z축 기준)
+            item.rotate(float(roll), 1, 0, 0)    # Yaw (Z축 기준)
             item.rotate(float(pitch), 0, 1, 0)  # Pitch (Y축 기준)
-            item.rotate(float(roll), 1, 0, 0)   # Roll (X축 기준)
-
+            item.rotate(float(yaw), 0, 0, 1)   # Roll (X축 기준)
+            
+            item.translate(0, 0, 1.0)
         # 4. OpenGL 뷰포트 강제 화면 재렌더링 트리거
         self.view.update()
