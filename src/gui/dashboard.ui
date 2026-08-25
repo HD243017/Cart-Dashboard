@@ -65,7 +65,7 @@
         
         <item>
          <widget class="QLabel" name="lbl_ai_title">
-          <property name="text"><string>📦 AI 적재물 검수 (FOMO)</string></property>
+          <property name="text"><string>AI 적재물 검수 (FOMO)</string></property>
          </widget>
         </item>
         <item>
@@ -94,7 +94,7 @@
         
         <item>
          <widget class="QLabel" name="lbl_sensor_title">
-          <property name="text"><string>⚡ 차량 텔레메트리 및 센서 상태</string></property>
+          <property name="text"><string>차량 텔레메트리 및 센서 상태</string></property>
          </widget>
         </item>
         <item>
@@ -179,7 +179,7 @@
         <property name="bottomMargin"><number>12</number></property>
         <item>
          <widget class="QLabel" name="lbl_graph_title">
-          <property name="text"><string>📈 실시간 자세 추이 (Pitch / Roll)</string></property>
+          <property name="text"><string>실시간 자세 추이 (Pitch / Roll)</string></property>
          </widget>
         </item>
         <item>
@@ -213,7 +213,7 @@
         <property name="bottomMargin"><number>12</number></property>
         <item>
          <widget class="QLabel" name="lbl_3d_title">
-          <property name="text"><string>🚗 실시간 3D 카트 자세 모니터링</string></property>
+          <property name="text"><string>실시간 3D 카트 자세 모니터링</string></property>
          </widget>
         </item>
         <item>

@@ -123,6 +123,7 @@ QLabel#lbl_tilt_side, QLabel#lbl_dist, QLabel#lbl_g {
 class DashboardWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.latest_imu = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}
 
         uic.loadUi(r"src\gui\dashboard.ui", self)
         self.setStyleSheet(MODERN_STYLE)
@@ -151,6 +152,10 @@ class DashboardWindow(QWidget):
         self.udp_thread = UDPThread(ip="0.0.0.0", port=5000)
         self.udp_thread.packet_received.connect(self.route_packet)
         self.udp_thread.start()
+
+        self.timer_3d = QTimer(self)
+        self.timer_3d.timeout.connect(self.sync_3d_viewer)
+        self.timer_3d.start(33) # 약 30 FPS로 3D 뷰어만 따로 업데이트
 
     def init_graph(self):
         graph_layout = QVBoxLayout(self.graph_widget)
@@ -210,25 +215,30 @@ class DashboardWindow(QWidget):
 
         header = parts[0].lower()
 
-        if header == 'imu' and len(parts) >= 6:
+        if header == 'car' and len(parts) >= 8:
             try:
                 yaw = float(parts[1])
-                pitch = float(parts[2])
-                roll = float(parts[3])
+                roll = -float(parts[2])
+                pitch = -float(parts[3])
                 g_val = float(parts[4])
                 status = parts[5].strip()
+                distance = int(parts[6].strip())
                 button_state = parts[-1].strip()
 
                 self.delivery_svc.process_button_state(button_state)
-                self.update_imu_data(yaw, pitch, roll, g_val, status)
+
+                self.update_data(yaw, pitch, roll, g_val, distance, status)
             except ValueError:
                 pass
 
-    def update_imu_data(self, yaw, pitch, roll, g_val, status):
+    def update_data(self, yaw, pitch, roll, g_val, distance, status):
         self.lbl_yaw.setText(f"회전값 (Yaw) : {yaw:.1f} °")
         self.lbl_tilt.setText(f"앞뒤 기울기 : {pitch:.1f} °")
         self.lbl_tilt_side.setText(f"옆기울기 : {roll:.1f} °")
         self.lbl_g.setText(f"충격량 (G) : {g_val:.2f} G")
+        
+        # 누락되었던 거리 UI 업데이트 라인 복구
+        self.lbl_dist.setText(f"장애물 거리 : {distance} cm")
 
         if getattr(self, 'prev_status', "") != status:
             self.prev_status = status
@@ -251,7 +261,8 @@ class DashboardWindow(QWidget):
                 if alert_event:
                     threading.Thread(
                         target=self.db.insert_driving_alert,
-                        args=(alert_event, pitch, roll, g_val, None),
+                        # 여기도 distance를 저장하도록 수정 (선택사항)
+                        args=(alert_event, pitch, roll, g_val, distance), 
                         daemon=True
                     ).start()
             except Exception as e:
@@ -264,7 +275,17 @@ class DashboardWindow(QWidget):
         self.curve_roll.setData(self.graph_data_roll)
 
         # 3D 카트 뷰어 실시간 동기화
-        self.cart_3d.update_pose(yaw=yaw, pitch=pitch, roll=roll)
+        self.latest_imu["yaw"] = yaw
+        self.latest_imu["pitch"] = pitch
+        self.latest_imu["roll"] = roll
+
+    def sync_3d_viewer(self):
+        # 타이머 주기에 맞춰 한 번만 렌더링
+        self.cart_3d.update_pose(
+            self.latest_imu["yaw"], 
+            self.latest_imu["pitch"], 
+            self.latest_imu["roll"]
+    )
 
     def on_frame_received(self, pixmap, counts):
         self.delivery_svc.update_vision_counts(counts)
