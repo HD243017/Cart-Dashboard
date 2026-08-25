@@ -20,7 +20,7 @@
    <property name="rightMargin"><number>16</number></property>
    <property name="bottomMargin"><number>16</number></property>
    
-   <!-- ================= 왼쪽 영역 ================= -->
+   <!-- ================= 왼쪽 영역 (비율 6 : 4) ================= -->
    <item>
     <layout class="QVBoxLayout" name="leftColLayout" stretch="6,4">
      <property name="spacing"><number>14</number></property>
@@ -51,7 +51,7 @@
      <item>
       <widget class="QFrame" name="frame_telemetry_container">
        <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
@@ -65,7 +65,7 @@
         
         <item>
          <widget class="QLabel" name="lbl_ai_title">
-          <property name="text"><string>AI 적재물 검수 (FOMO)</string></property>
+          <property name="text"><string>📦 AI 적재물 검수 (FOMO)</string></property>
          </widget>
         </item>
         <item>
@@ -94,7 +94,7 @@
         
         <item>
          <widget class="QLabel" name="lbl_sensor_title">
-          <property name="text"><string>차량 텔레메트리 및 센서 상태</string></property>
+          <property name="text"><string>⚡ 차량 텔레메트리 및 센서 상태</string></property>
          </widget>
         </item>
         <item>
@@ -157,46 +157,12 @@
     </layout>
    </item>
    
-   <!-- ================= 오른쪽 영역 (2D 그래프 / 3D 뷰어 1:1 완벽 대칭) ================= -->
+   <!-- ================= 오른쪽 영역 (비율 6 : 4로 왼쪽과 일치) ================= -->
    <item>
-    <layout class="QVBoxLayout" name="rightColLayout" stretch="1,1">
+    <layout class="QVBoxLayout" name="rightColLayout" stretch="6,4">
      <property name="spacing"><number>14</number></property>
      
-     <!-- 1. 2D 그래프 -->
-     <item>
-      <widget class="QFrame" name="frame_graph">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <layout class="QVBoxLayout" name="graphContainerLayout">
-        <property name="spacing"><number>6</number></property>
-        <property name="leftMargin"><number>14</number></property>
-        <property name="topMargin"><number>12</number></property>
-        <property name="rightMargin"><number>14</number></property>
-        <property name="bottomMargin"><number>12</number></property>
-        <item>
-         <widget class="QLabel" name="lbl_graph_title">
-          <property name="text"><string>실시간 자세 추이 (Pitch / Roll)</string></property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QWidget" name="graph_widget" native="true">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-     </item>
-     
-     <!-- 2. 3D 뷰어 (2D와 동일한 크기/여백 설정) -->
+     <!-- 1. 3D 뷰어 (상단 배치 / 비디오와 동일 높이) -->
      <item>
       <widget class="QFrame" name="frame_3d">
        <property name="sizePolicy">
@@ -213,11 +179,45 @@
         <property name="bottomMargin"><number>12</number></property>
         <item>
          <widget class="QLabel" name="lbl_3d_title">
-          <property name="text"><string>실시간 3D 카트 자세 모니터링</string></property>
+          <property name="text"><string>🚗 실시간 3D 카트 자세 모니터링</string></property>
          </widget>
         </item>
         <item>
          <widget class="QWidget" name="widget_3d_container" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     
+     <!-- 2. 2D 그래프 (하단 배치 / 수치 프레임과 동일 높이) -->
+     <item>
+      <widget class="QFrame" name="frame_graph">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <layout class="QVBoxLayout" name="graphContainerLayout">
+        <property name="spacing"><number>6</number></property>
+        <property name="leftMargin"><number>14</number></property>
+        <property name="topMargin"><number>12</number></property>
+        <property name="rightMargin"><number>14</number></property>
+        <property name="bottomMargin"><number>12</number></property>
+        <item>
+         <widget class="QLabel" name="lbl_graph_title">
+          <property name="text"><string>📈 실시간 자세 추이 (Pitch / Roll)</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QWidget" name="graph_widget" native="true">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
             <horstretch>0</horstretch>

@@ -15,112 +15,63 @@ from src.core.delivery_service import DeliveryService
 from src.gui import video_overlay
 from src.communication.camera_manager import CameraManager
 from src.gui.cart_3d_viewer import Cart3DViewer
-
 MODERN_STYLE = """
 QWidget#Dashboard {
     background-color: #0f111a;
     color: #cdd6f4;
     font-family: "Pretendard", "Segoe UI", "Malgun Gothic", sans-serif;
 }
-
-/* 카드형 컨테이너 스타일 */
 QFrame#frame_video, QFrame#frame_telemetry_container, QFrame#frame_graph, QFrame#frame_3d {
     background-color: #181926;
     border: 1px solid #24273a;
     border-radius: 12px;
 }
-
-/* 영상 스트리밍 뷰어 */
 QLabel#video_label {
     background-color: #11121d;
     border-radius: 8px;
     color: #6e738d;
     font-size: 14px;
 }
-
-/* 섹션 타이틀: #5cffd1 색상 적용 */
 QLabel#lbl_ai_title, QLabel#lbl_sensor_title, QLabel#lbl_graph_title, QLabel#lbl_3d_title {
     color: #5cffd1;
     font-size: 14px;
     font-weight: bold;
     padding-bottom: 1px;
 }
-
-/* 슬림 LED 뱃지 */
 QLabel#lbl_red {
-    background-color: #3b222e;
-    color: #ed8796;
-    border: 1px solid #5a2e3f;
-    border-radius: 6px;
-    padding: 5px 8px;
-    font-weight: bold;
-    font-size: 12px;
+    background-color: #3b222e; color: #ed8796;
+    border: 1px solid #5a2e3f; border-radius: 6px; padding: 5px 8px;
+    font-weight: bold; font-size: 12px;
 }
-
 QLabel#lbl_green {
-    background-color: #233b2e;
-    color: #a6da95;
-    border: 1px solid #325942;
-    border-radius: 6px;
-    padding: 5px 8px;
-    font-weight: bold;
-    font-size: 12px;
+    background-color: #233b2e; color: #a6da95;
+    border: 1px solid #325942; border-radius: 6px; padding: 5px 8px;
+    font-weight: bold; font-size: 12px;
 }
-
 QLabel#lbl_yellow {
-    background-color: #3d3725;
-    color: #eed49f;
-    border: 1px solid #5d5332;
-    border-radius: 6px;
-    padding: 5px 8px;
-    font-weight: bold;
-    font-size: 12px;
+    background-color: #3d3725; color: #eed49f;
+    border: 1px solid #5d5332; border-radius: 6px; padding: 5px 8px;
+    font-weight: bold; font-size: 12px;
 }
-
-/* 주행 상태 인디케이터 */
 QLabel#lbl_status {
-    background-color: #1e3a2f;
-    color: #a6da95;
-    border: 1px solid #2e5e47;
-    font-weight: bold;
-    font-size: 12px;
-    border-radius: 6px;
-    padding: 6px 10px;
+    background-color: #1e3a2f; color: #a6da95;
+    border: 1px solid #2e5e47; font-weight: bold; font-size: 12px;
+    border-radius: 6px; padding: 6px 10px;
 }
-
-/* DB 로그 버튼: 스텔스 다크 + 화이트 네온 글로우 */
 QPushButton#btn_db_log {
-    background-color: #181926;
-    color: #a5adcb;
-    font-weight: bold;
-    font-size: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
-    padding: 6px 12px;
+    background-color: #181926; color: #a5adcb;
+    font-weight: bold; font-size: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 6px 12px;
 }
 QPushButton#btn_db_log:hover {
-    background-color: #1e2030;
-    color: #ffffff;
-    border: 1px solid #ffffff;
+    background-color: #1e2030; color: #ffffff; border: 1px solid #ffffff;
 }
-QPushButton#btn_db_log:pressed {
-    background-color: #2b2f46;
-    border: 1px solid #8aadf4;
-    color: #8aadf4;
-}
-
-/* 텔레메트리 지표 카드 */
 QLabel#lbl_yaw, QLabel#lbl_speed, QLabel#lbl_tilt, 
 QLabel#lbl_tilt_side, QLabel#lbl_dist, QLabel#lbl_g {
-    background-color: #1e2030;
-    color: #cad3f5;
-    border: 1px solid #2b2f46;
-    border-radius: 6px;
-    padding: 6px 8px;
-    font-size: 12px;
+    background-color: #1e2030; color: #cad3f5;
+    border: 1px solid #2b2f46; border-radius: 6px; padding: 6px 8px; font-size: 12px;
 }
 """
-
 
 class DashboardWindow(QWidget):
     def __init__(self):
@@ -209,14 +160,16 @@ class DashboardWindow(QWidget):
         dialog.exec_()
 
     def route_packet(self, raw_data):
+        # 패킷 예시: [헤더,데이터,데이터,...,데이터,상태]
         if not raw_data:
             return
         parts = raw_data.split(',')
         if not parts:
             return
 
-        header = parts[0].lower()
+        header = parts[0].lower() # 소문자로 변환
 
+        # 헤더 분기
         if header == 'car' and len(parts) >= 8:
             try:
                 yaw = float(parts[1])
@@ -234,13 +187,11 @@ class DashboardWindow(QWidget):
                 pass
 
     def update_data(self, yaw, pitch, roll, g_val, distance, status):
-        self.lbl_yaw.setText(f"회전값 (Yaw) : {yaw:.1f} °")
-        self.lbl_tilt.setText(f"앞뒤 기울기 : {pitch:.1f} °")
-        self.lbl_tilt_side.setText(f"옆기울기 : {roll:.1f} °")
-        self.lbl_g.setText(f"충격량 (G) : {g_val:.2f} G")
-        
-        # 누락되었던 거리 UI 업데이트 라인 복구
-        self.lbl_dist.setText(f"장애물 거리 : {distance} cm")
+        self.lbl_yaw.setText(f"• 회전값(Yaw) : {yaw:.1f} °")
+        self.lbl_tilt.setText(f"• 앞뒤 기울기 : {pitch:.1f} °")
+        self.lbl_tilt_side.setText(f"• 옆기울기 : {roll:.1f} °")
+        self.lbl_g.setText(f"• 가속도(G) : {g_val:.2f} G")
+        self.lbl_dist.setText(f"• 초음파 거리 : {distance} cm")
 
         if getattr(self, 'prev_status', "") != status:
             self.prev_status = status
@@ -259,14 +210,15 @@ class DashboardWindow(QWidget):
 
         if self.db_connected:
             try:
-                alert_event = self.alert_filter.evaluate_imu(pitch, roll, g_val)
-                if alert_event:
+                alert_event = self.alert_filter.evaluate_imu(pitch, roll, g_val, distance)
+                if alert_event: 
+                    #데몬 스레드로 비동기 처리
                     threading.Thread(
                         target=self.db.insert_driving_alert,
-                        # 여기도 distance를 저장하도록 수정 (선택사항)
-                        args=(alert_event, pitch, roll, g_val, distance), 
+                        args=(alert_event, pitch, roll, g_val, distance),
                         daemon=True
                     ).start()
+
             except Exception as e:
                 print(f"[DB 저장 에러]: {e}")
 

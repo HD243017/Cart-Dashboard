@@ -17,14 +17,10 @@ class DeliveryService:
         self.consecutive_count: int = 0  # 동일 수량 연속 감지 횟수
 
     def process_button_state(self, current_state: str):
-        """UDP 패킷으로부터 수신된 버튼 상태(0/1) 처리"""
+        """IMU 또는 센서 패킷에서 수신한 버튼 상태(0/1) 처리"""
         # [0 -> 1] 배송 시작
         if current_state == '1' and self.prev_button_state == '0':
             self.start_counts = self.current_counts.copy()
-            # 새로운 배송 시작 시 디바운스 버퍼 초기화
-            self.candidate_counts = None
-            self.consecutive_count = 0
-
             print(f"[SYSTEM] 배송 시작 - 초기 수량: {self.start_counts}")
             
             if self.db:
@@ -33,14 +29,12 @@ class DeliveryService:
                     self.start_counts.get('g1', 0),
                     self.start_counts.get('y1', 0)
                 )
-                print(f"[SYSTEM] 신규 Order ID 발급: {self.current_order_id}")
 
         # [1 -> 0] 배송 종료
         elif current_state == '0' and self.prev_button_state == '1':
             print("[SYSTEM] 배송 종료 감지")
             if self.db and self.current_order_id is not None:
                 end_counts = self.current_counts
-                
                 is_match = (
                     end_counts.get('r1', 0) == self.start_counts.get('r1', 0) and
                     end_counts.get('g1', 0) == self.start_counts.get('g1', 0) and
@@ -55,10 +49,7 @@ class DeliveryService:
                     end_counts.get('y1', 0),
                     final_status
                 )
-                print(f"[SYSTEM] 주문 완료 처리 (ID: {self.current_order_id}, 상태: {final_status})")
                 self.current_order_id = None
-                self.candidate_counts = None
-                self.consecutive_count = 0
 
         self.prev_button_state = current_state
 
