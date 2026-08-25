@@ -1,3 +1,5 @@
+import math
+import time
 import threading
 from PyQt5.QtWidgets import QWidget, QMessageBox, QVBoxLayout
 from PyQt5.QtCore import Qt, QTimer
@@ -151,6 +153,28 @@ class DashboardWindow(QWidget):
         self.udp_thread = UDPThread(ip="0.0.0.0", port=5000)
         self.udp_thread.packet_received.connect(self.route_packet)
         self.udp_thread.start()
+
+        #==================================dummy
+        #self.sim_tick = 0
+        #self.dummy_timer = QTimer(self)
+        #self.dummy_timer.timeout.connect(self.generate_dummy_imu)
+        #self.dummy_timer.start(50)
+    
+    def generate_dummy_imu(self):
+        self.sim_tick += 1
+        t = self.sim_tick * 0.05
+
+        yaw = (self.sim_tick * 1.5) % 360          # 0 ~ 360도 부드럽게 회전
+        pitch = math.sin(t * 2) * 15.0             # -15도 ~ +15도 앞뒤 흔들림
+        roll = math.cos(t * 1.5) * 12.0            # -12도 ~ +12도 좌우 롤링
+        g_val = 1.0 + abs(math.sin(t * 3)) * 0.3    # 1.0 ~ 1.3 G
+        speed = 1.2 + math.sin(t) * 0.4            # 속도
+
+        self.lbl_speed.setText(f"속도 : {speed:.1f} m/s")
+        self.lbl_dist.setText(f"장애물 거리 : {int(50 + math.sin(t)*30)} cm")
+        self.update_imu_data(yaw, pitch, roll, g_val, "NORMAL")
+
+   #===================================================
 
     def init_graph(self):
         graph_layout = QVBoxLayout(self.graph_widget)
