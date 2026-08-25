@@ -200,7 +200,6 @@ void loop()
 
     if (current_motion == FORWARD && obstacle_stop)
     {
-      Serial.println("!!! 장애물 감지 → 즉시 정지 !!!");
       stop_motor();
     }
   }
@@ -211,16 +210,13 @@ void loop()
     String cmd = btSerial.readStringUntil('\n');
     cmd.trim();
 
-    Serial.print("BT 명령 수신: ");
     Serial.println(cmd);
 
     if (cmd == "F" || cmd == "f" || cmd == "F0")
     {
-      Serial.println("→ 전진 명령");
 
       if (obstacle_stop)
       {
-        Serial.println("→ 전진 차단! 장애물 있음");
         stop_motor();
       }
       else
@@ -230,22 +226,18 @@ void loop()
     }
     else if (cmd == "B" || cmd == "b" || cmd == "B0")
     {
-      Serial.println("→ 후진 명령");
       handle_backward_command();
     }
     else if (cmd == "L" || cmd == "l" || cmd == "L0")
     {
-      Serial.println("→ 좌회전 명령");
       handle_left_command();
     }
     else if (cmd == "R" || cmd == "r" || cmd == "R0")
     {
-      Serial.println("→ 우회전 명령");
       handle_right_command();
     }
     else if (cmd == "X" || cmd == "x" || cmd == "X0")
     {
-      Serial.println("→ X 명령 : 즉시 정지");
       stop_motor();
     }
   }
@@ -281,8 +273,6 @@ void handle_forward_command()
       forward();
     }
 
-    Serial.print("전진 속도 증가 : ");
-    Serial.println(speed);
     return;
   }
 
@@ -301,13 +291,10 @@ void handle_forward_command()
     if (mpu_available)
     {
       target_yaw = yaw_angle;
-      Serial.print("직진 기준 Yaw : ");
-      Serial.println(target_yaw);
     }
 
     forward();
-    Serial.print("전진 시작 : ");
-    Serial.println(speed);
+
     return;
   }
 
@@ -336,8 +323,7 @@ void handle_backward_command()
     if (speed > MAX_SPEED) speed = MAX_SPEED;
 
     backward();
-    Serial.print("후진 속도 증가 : ");
-    Serial.println(speed);
+
     return;
   }
 
@@ -354,8 +340,7 @@ void handle_backward_command()
     speed = START_SPEED;
 
     backward();
-    Serial.print("후진 시작 : ");
-    Serial.println(speed);
+
     return;
   }
 
@@ -374,10 +359,6 @@ void start_direction_change(Motion target_motion)
   next_motion = target_motion;
   last_decel_time = millis();
 
-  Serial.println("=================================");
-  Serial.println("방향 전환");
-  Serial.println("현재 방향 감속 시작");
-  Serial.println("=================================");
 }
 
 // ==================================================
@@ -398,8 +379,6 @@ void update_direction_change()
     if (current_motion == FORWARD) forward();
     else if (current_motion == BACKWARD) backward();
 
-    Serial.print("방향 전환 감속 : ");
-    Serial.println(speed);
     return;
   }
 
@@ -415,28 +394,21 @@ void update_direction_change()
     if (obstacle_stop)
     {
       stop_motor();
-      Serial.println("→ 전진 전환 취소 : 장애물");
       return;
     }
 
     if (mpu_available)
     {
       target_yaw = yaw_angle;
-      Serial.print("새로운 직진 기준 Yaw : ");
-      Serial.println(target_yaw);
     }
 
     forward();
-    Serial.println("→ 감속 완료 → 전진 시작");
-    Serial.print("전진 시작 속도 : ");
-    Serial.println(speed);
+
   }
   else if (current_motion == BACKWARD)
   {
     backward();
-    Serial.println("→ 감속 완료 → 후진 시작");
-    Serial.print("후진 시작 속도 : ");
-    Serial.println(speed);
+
   }
 
   next_motion = STOP;
@@ -452,8 +424,7 @@ void handle_left_command()
   speed = START_SPEED;
   left();
 
-  Serial.print("좌회전 속도 : ");
-  Serial.println(speed);
+
 }
 
 void handle_right_command()
@@ -463,8 +434,7 @@ void handle_right_command()
   speed = START_SPEED;
   right();
 
-  Serial.print("우회전 속도 : ");
-  Serial.println(speed);
+
 }
 
 // ==================================================
