@@ -104,9 +104,9 @@ class DashboardWindow(QWidget):
                 roll = float(parts[3])
                 g_val = float(parts[4])
                 status = parts[5].strip()
-                button_state = parts[-1].strip()
+                # button_state = parts[-1].strip()
 
-                self.delivery_svc.process_button_state(button_state)
+                # self.delivery_svc.process_button_state(button_state)
 
                 self.update_imu_data(yaw, pitch, roll, g_val, status)
             except ValueError:

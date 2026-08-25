@@ -2,7 +2,7 @@
 #include <SoftwareSerial.h>
 
 // ESP-01과 통신할 핀 설정 (RX: 2, TX: 3)
-SoftwareSerial espSerial(2, 3);
+SoftwareSerial espSerial(8, 12);
 
 // ==========================================
 // [IMU 관련 상수값]
@@ -10,15 +10,11 @@ SoftwareSerial espSerial(2, 3);
 const int MPU_ADDR = 0x68;
 const float LIMIT_SHOCK_G = 2.5;             // 충격 판정 기준 2.5g
 const float LIMIT_SLOPE_DEG = 20.0;          // 경사로 판정 기준 20도
-const unsigned long PACKET_INTERVAL_MS = 50; // PC 데이터 전송 주기 (50ms)
+const unsigned long PACKET_INTERVAL_MS = 100; // PC 데이터 전송 주기 (50ms)
 
 // ==========================================
-// [와이파이 및 PC 네트워크 설정]
+// [변수]
 // ==========================================
-String ssid = "3F_302";     
-String password = "0424719222!!"; 
-String target_ip = "192.168.0.164"; // 💡 dashboard.py를 실행 중인 PC의 IP로 변경하세요!
-String target_port = "5000";       // 💡 dashboard.py에서 설정한 UDP 포트 (5000)
 
 int16_t raw_ax, raw_ay, raw_az;
 int16_t raw_gx, raw_gy, raw_gz;
@@ -32,27 +28,6 @@ String cart_status = "NORMAL";
 
 unsigned long prev_time = 0;
 unsigned long last_send_time = 0; 
-
-// ==========================================
-// [와이파이 및 UDP 세션 연결 함수]
-// ==========================================
-void connect_wifi() {
-  Serial.println("ESP-01 초기화 및 와이파이 접속 중...");
-  espSerial.println("AT+RST");
-  delay(2000);
-  
-  espSerial.println("AT+CWMODE=1");
-  delay(1000);
-  
-  Serial.println("공유기 접속 시도 중...");
-  espSerial.println("AT+CWJAP=\"" + ssid + "\",\"" + password + "\"");
-  delay(6000); 
-  
-  // PC의 IP와 포트(5000)로 UDP 통신 시작
-  espSerial.println("AT+CIPSTART=\"UDP\",\"" + target_ip + "\"," + target_port + "," + target_port + ",0");
-  delay(1000);
-  Serial.println("와이파이 UDP 세팅 완료! 통신 시작!");
-}
 
 // ==========================================
 // [IMU 캘리브레이션 및 필터 함수]
@@ -139,7 +114,7 @@ void send_cart_packet() {
                   String(pitch_angle, 1) + "," + 
                   String(roll_angle, 1) + "," + 
                   String(total_g, 2) + "," + 
-                  cart_status;
+                  cart_status + ",0";
 
   // ESP-01로 단순 전송 (끝에 줄바꿈 \n 포함)
   espSerial.println(packet);
@@ -150,9 +125,12 @@ void send_cart_packet() {
 // ==========================================
 void setup() {
   Serial.begin(115200);
-  espSerial.begin(9600); // ESP-01 펌웨어 속도에 맞춰 9600 또는 115200 설정
+  espSerial.begin(19200); // ESP-01 펌웨어 속도에 맞춰 9600 또는 115200 설정
 
-  espSerial.println("CONFIG,3F_302,0424719222!!,192.168.0.162");
+  Serial.println("ESP-01 부팅 대기 (12초)...");
+  delay(12000);
+
+  espSerial.println("CONFIG,3F_302,0424719222!!,192.168.0.164");
   delay(1000);
 
   Wire.begin();

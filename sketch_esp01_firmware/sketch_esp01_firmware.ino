@@ -11,23 +11,23 @@ WiFiUDP udp;
 
 // 💡 와이파이 접속 전용 함수
 void connectToWiFi() {
-  WiFi.disconnect(); // 기존 연결이 있다면 끊고 새롭게 시작
+  udp.stop(); // 재연결 시 기존에 열린 UDP 포트를 닫아줍니다.
+  
+  WiFi.disconnect(); 
   WiFi.begin(current_ssid.c_str(), current_password.c_str());
   
   long start_time = millis();
-  // 최대 10초간 접속 시도
   while (WiFi.status() != WL_CONNECTED && millis() - start_time < 10000) {
     delay(500);
   }
   
-  // 접속 성공 시 UDP 포트 개방
   if(WiFi.status() == WL_CONNECTED) {
     udp.begin(udp_port);
   }
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(19200);
   connectToWiFi(); // 켜지자마자 디폴트 값으로 우선 접속 시도
 }
 
@@ -43,19 +43,22 @@ void loop() {
     // 아두이노 전송 포맷: CONFIG,와이파이이름,비번,PC아이피
     // ========================================================
     if (line.startsWith("CONFIG,")) {
-      // 쉼표(,)를 기준으로 데이터 쪼개기
       int first_comma = line.indexOf(',');
       int second_comma = line.indexOf(',', first_comma + 1);
       int third_comma = line.indexOf(',', second_comma + 1);
 
-      // 데이터가 정상적으로 4조각으로 왔다면
       if (first_comma > 0 && second_comma > 0 && third_comma > 0) {
-        current_ssid = line.substring(first_comma + 1, second_comma);
-        current_password = line.substring(second_comma + 1, third_comma);
-        current_pc_ip = line.substring(third_comma + 1);
+        String new_ssid = line.substring(first_comma + 1, second_comma);
+        String new_password = line.substring(second_comma + 1, third_comma);
+        String new_pc_ip = line.substring(third_comma + 1);
         
-        // 새롭게 받은 정보로 와이파이 즉시 재접속!
-        connectToWiFi();
+        // 💡 중요: 기존 정보와 다를 때만 재접속하여 딜레이와 끊김 방지
+        if (current_ssid != new_ssid || current_password != new_password || current_pc_ip != new_pc_ip) {
+          current_ssid = new_ssid;
+          current_password = new_password;
+          current_pc_ip = new_pc_ip;
+          connectToWiFi();
+        }
       }
     } 
     // ========================================================
