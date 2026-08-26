@@ -405,12 +405,12 @@ void setup()
   // ==================================================
   // LCD 초기화 (가장 먼저 실행, 1행만 사용)
   // ==================================================
+  Wire.begin();
   lcd.init();
   lcd.backlight();
 
   Serial.println("MPU6050 통신 시도 중...");
   lcd_show_stage("MPU Connecting");
-  Wire.begin();
   Wire.beginTransmission(MPU_ADDR);
 
   byte error = Wire.endTransmission();
