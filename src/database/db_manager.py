@@ -3,8 +3,8 @@ import pymysql
 DB_CONFIG = {
     "host":"localhost",
     "user": "root",
-    "password":"azsx1234",
-    "database":"cart_db",
+    "password":"1102",
+    "database":"cartdb",
     "port": 3306,
     "charset": "utf8mb4"
 }

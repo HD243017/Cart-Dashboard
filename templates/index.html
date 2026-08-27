@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트 물류 카트 관제 시스템 (Control Dashboard)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Pretendard", "Segoe UI", "Malgun Gothic", sans-serif; }
+        body { background-color: #0f111a; color: #cdd6f4; padding: 16px; min-height: 100vh; }
+
+        /* 2열 메인 레이아웃 (좌:우 = 1:1) */
+        .main-container { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 1440px; margin: 0 auto; }
+        .col { display: flex; flex-direction: column; gap: 14px; }
+
+        .card { background-color: #181926; border: 1px solid #24273a; border-radius: 12px; padding: 14px; }
+        .title { color: #5cffd1; font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+
+        /* 뷰포트 (비디오 & 3D 동일 높이 360px) */
+        .viewport-box { width: 100%; height: 360px; background: #11121d; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
+        .viewport-box img { width: 100%; height: 100%; object-fit: contain; }
+        #canvas3d { width: 100% !important; height: 100% !important; display: block; }
+
+        /* AI 적재물 칩 */
+        .ai-chips { display: flex; gap: 8px; margin-bottom: 12px; }
+        .chip { flex: 1; padding: 6px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; text-align: center; }
+        .chip-red { background: #3b222e; color: #ed8796; border: 1px solid #5a2e3f; }
+        .chip-green { background: #233b2e; color: #a6da95; border: 1px solid #325942; }
+        .chip-yellow { background: #3d3725; color: #eed49f; border: 1px solid #5d5332; }
+
+        /* 상태 뱃지 */
+        .status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+        .status-badge { flex: 1; background-color: #1e3a2f; color: #a6da95; border: 1px solid #2e5e47; font-weight: bold; font-size: 12px; border-radius: 6px; padding: 6px 10px; text-align: center; }
+        .status-alert { background-color: #3e1f2b; color: #ed8796; border: 1px solid #6e2d3b; }
+
+        /* 텔레메트리 그리드 */
+        .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+        .metric-box { background-color: #1e2030; color: #cad3f5; border: 1px solid #2b2f46; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+
+        /* 그래프 영역 */
+        .chart-box { height: 210px; position: relative; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- 좌측 컬럼 -->
+        <div class="col">
+            <div class="card">
+                <div class="viewport-box">
+                    <img src="/video_feed" alt="Connecting to ESP32-CAM..." onerror="this.src=''; this.alt='ESP32-CAM 연결 대기 중...'">
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="title">📦 AI 적재물 검수 (FOMO)</div>
+                <div class="ai-chips">
+                    <div class="chip chip-red" id="lbl_red">RED LED : 0 개</div>
+                    <div class="chip chip-green" id="lbl_green">GREEN LED : 0 개</div>
+                    <div class="chip chip-yellow" id="lbl_yellow">YELLOW LED : 0 개</div>
+                </div>
+
+                <div class="title">⚡ 차량 텔레메트리 및 센서 상태</div>
+                <div class="status-row">
+                    <div class="status-badge" id="lbl_status">상태 : NORMAL (정상 주행)</div>
+                </div>
+
+                <div class="telemetry-grid">
+                    <div class="metric-box" id="lbl_yaw">• 회전값(Yaw) : 0.0 °</div>
+                    <div class="metric-box" id="lbl_speed">• 속도 : 0.0 m/s</div>
+                    <div class="metric-box" id="lbl_tilt">• 앞뒤 기울기 : 0.0 °</div>
+                    <div class="metric-box" id="lbl_tilt_side">• 옆기울기 : 0.0 °</div>
+                    <div class="metric-box" id="lbl_dist">• 장애물 거리 : 0 cm</div>
+                    <div class="metric-box" id="lbl_g">• 충격량(G) : 1.00 G</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측 컬럼 -->
+        <div class="col">
+            <div class="card">
+                <div class="title">🚗 실시간 3D 카트 자세 모니터링</div>
+                <div class="viewport-box" id="container3d"></div>
+            </div>
+
+            <div class="card">
+                <div class="title">📈 실시간 자세 추이 (Pitch / Roll)</div>
+                <div class="chart-box">
+                    <canvas id="imuChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================== 1. Three.js 3D 카트 렌더러 ==================
+        const container3d = document.getElementById('container3d');
+        const width = container3d.clientWidth || 500;
+        const height = container3d.clientHeight || 360;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x181926);
+
+        const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+        camera.position.set(11.3, 6.7, 11.3);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(width, height);
+        renderer.domElement.id = "canvas3d";
+        container3d.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.enableZoom = true;
+        controls.minDistance = 5;
+        controls.maxDistance = 30;
+
+        // 조명
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // 바닥 그리드
+        const grid = new THREE.GridHelper(18, 18, 0x494d64, 0x24273a);
+        grid.position.y = -1.2;
+        scene.add(grid);
+
+        // 카트 그룹
+        const cartGroup = new THREE.Group();
+
+        // 카트 본체
+        const bodyGeo = new THREE.BoxGeometry(4.0, 1.2, 2.4);
+        const bodyMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(0.23, 0.51, 0.96),
+            roughness: 0.4,
+            metalness: 0.2,
+            transparent: true,
+            opacity: 0.9
+        });
+        const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+        const bodyEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(bodyGeo),
+            new THREE.LineBasicMaterial({ color: 0xb3ccff })
+        );
+        bodyMesh.add(bodyEdges);
+        cartGroup.add(bodyMesh);
+
+        // 전방 헤드포인트
+        const headGeo = new THREE.BoxGeometry(0.5, 0.4, 1.2);
+        const headMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(0.65, 0.85, 0.58),
+            roughness: 0.3
+        });
+        const headMesh = new THREE.Mesh(headGeo, headMat);
+        headMesh.position.set(1.75, 0.8, 0);
+        const headEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(headGeo),
+            new THREE.LineBasicMaterial({ color: 0xffffff })
+        );
+        headMesh.add(headEdges);
+        cartGroup.add(headMesh);
+
+        // 바퀴
+        const wheelGeo = new THREE.BoxGeometry(0.8, 0.4, 0.3);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.1, 0.1, 0.15) });
+        const wheelOffsets = [
+            [ 1.3, -0.7,  1.3],
+            [ 1.3, -0.7, -1.3],
+            [-1.3, -0.7,  1.3],
+            [-1.3, -0.7, -1.3]
+        ];
+        wheelOffsets.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+            wheel.position.set(...pos);
+            const wEdges = new THREE.LineSegments(
+                new THREE.EdgesGeometry(wheelGeo),
+                new THREE.LineBasicMaterial({ color: 0x666680 })
+            );
+            wheel.add(wEdges);
+            cartGroup.add(wheel);
+        });
+
+        scene.add(cartGroup);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            if (!container3d) return;
+            const w = container3d.clientWidth;
+            const h = container3d.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        // ================== 2. 2D Chart.js ==================
+        const ctx = document.getElementById('imuChart').getContext('2d');
+        const maxPoints = 100;
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(maxPoints).fill(''),
+                datasets: [
+                    { label: 'Pitch (앞뒤)', data: Array(maxPoints).fill(0), borderColor: '#a6da95', borderWidth: 2, tension: 0.1, pointRadius: 0 },
+                    { label: 'Roll (좌우)', data: Array(maxPoints).fill(0), borderColor: '#8aadf4', borderWidth: 2, tension: 0.1, pointRadius: 0 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    y: { min: -30, max: 30, grid: { color: '#24273a' }, ticks: { color: '#a5adcb' } },
+                    x: { grid: { color: '#24273a' }, ticks: { display: false } }
+                },
+                plugins: { legend: { labels: { color: '#cad3f5' } } }
+            }
+        });
+
+        // ================== 3. WebSocket 실시간 연동 (ngrok wss 지원) ==================
+        const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${location.host}/ws/telemetry`;
+        console.log(`[WS] Connecting to: ${wsUrl}`);
+        
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            console.log("[WS] Telemetry WebSocket Connected.");
+        };
+
+        ws.onerror = (err) => {
+            console.error("[WS] Error:", err);
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const d = JSON.parse(event.data);
+
+                // 수치 업데이트
+                document.getElementById('lbl_yaw').innerText = `• 회전값(Yaw) : ${d.yaw.toFixed(1)} °`;
+                document.getElementById('lbl_tilt').innerText = `• 앞뒤 기울기 : ${d.pitch.toFixed(1)} °`;
+                document.getElementById('lbl_tilt_side').innerText = `• 옆기울기 : ${d.roll.toFixed(1)} °`;
+                document.getElementById('lbl_dist').innerText = `• 장애물 거리 : ${d.distance} cm`;
+                document.getElementById('lbl_g').innerText = `• 충격량(G) : ${d.g_val.toFixed(2)} G`;
+
+                // AI LED 검수 수치 업데이트
+                if (d.led_counts) {
+                    document.getElementById('lbl_red').innerText = `RED LED : ${d.led_counts.r1 || 0} 개`;
+                    document.getElementById('lbl_green').innerText = `GREEN LED : ${d.led_counts.g1 || 0} 개`;
+                    document.getElementById('lbl_yellow').innerText = `YELLOW LED : ${d.led_counts.y1 || 0} 개`;
+                }
+
+                // 상태 뱃지
+                const statusBadge = document.getElementById('lbl_status');
+                if (d.status === "NORMAL") {
+                    statusBadge.innerText = "상태 : NORMAL (정상 주행)";
+                    statusBadge.className = "status-badge";
+                } else {
+                    statusBadge.innerText = `경고 : 🚨 ${d.status}`;
+                    statusBadge.className = "status-badge status-alert";
+                }
+
+                // 3D 카트 회전 변환
+                const rad = Math.PI / 180;
+                cartGroup.rotation.order = 'ZYX';
+                cartGroup.rotation.y = -d.yaw * rad;
+                cartGroup.rotation.z = d.pitch * rad;
+                cartGroup.rotation.x = -d.roll * rad;
+
+                // 2D 차트 갱신
+                chart.data.datasets[0].data.push(d.pitch);
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.push(d.roll);
+                chart.data.datasets[1].data.shift();
+                chart.update();
+            } catch (e) {
+                console.error("[WS] Data parse error:", e);
+            }
+        };
+    </script>
+</body>
+</html>
