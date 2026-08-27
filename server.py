@@ -9,6 +9,7 @@ import cv2
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.encoders import jsonable_encoder
 
 from src.database.db_manager import DBManager
 from src.core.alert_filter import AlertFilter
@@ -36,7 +37,11 @@ connected_websockets = set()
 # ================== DB 및 비즈니스 로직 ==================
 try:
     db = DBManager()
+    # 실제 커넥션 핑 테스트
+    test_conn = db._get_connection()
+    test_conn.close()
     db_connected = True
+    print("[SYSTEM] 로컬 DB (MySQL: cartdb) 연결 성공")
 except Exception as e:
     print(f"[SYSTEM] DB 연결 실패 (UI 단독 모드): {e}")
     db = None
@@ -50,14 +55,14 @@ def udp_worker():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("0.0.0.0", 5000))
     print("[UDP] 0.0.0.0:5000 리스닝 시작...")
-    
+
     while True:
         try:
             data, _ = sock.recvfrom(1024)
             raw_data = data.decode('utf-8', errors='ignore').strip()
             if not raw_data:
                 continue
-            
+
             parts = raw_data.split(',')
             if parts[0].lower() == 'car' and len(parts) >= 8:
                 yaw = float(parts[1])
@@ -92,11 +97,10 @@ def udp_worker():
 
 # ================== 2. ESP32-CAM 이미지 & FOMO 폴링 워커 ==================
 def camera_worker(base_url="http://192.168.0.83", interval=0.5):
-    """기존 VideoThread 로직을 순수 requests 스레드로 구현"""
     global latest_jpeg_bytes
     base_url = base_url.rstrip('/')
     print(f"[CAMERA] {base_url} 폴링 시작...")
-    
+
     with requests.Session() as session:
         while True:
             loop_start = time.time()
@@ -129,7 +133,7 @@ def camera_worker(base_url="http://192.168.0.83", interval=0.5):
                     cart_state["led_counts"] = counts
                     delivery_svc.update_vision_counts(counts)
 
-                    # 바운딩 박스 그리기
+                    # 바운딩 박스 오버레이
                     if cv_img is not None:
                         processed_img = video_overlay.draw_detections(cv_img, valid_detections)
                         ret, buffer = cv2.imencode('.jpg', processed_img, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -137,8 +141,7 @@ def camera_worker(base_url="http://192.168.0.83", interval=0.5):
                             with frame_lock:
                                 latest_jpeg_bytes = buffer.tobytes()
 
-            except Exception as e:
-                # 연결 실패 시 조용히 대기 후 재시도
+            except Exception:
                 pass
 
             elapsed = time.time() - loop_start
@@ -161,7 +164,7 @@ def generate_video_stream():
         if frame is None:
             time.sleep(0.05)
             continue
-            
+
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
         time.sleep(0.05)
@@ -169,7 +172,7 @@ def generate_video_stream():
 @app.get("/video_feed")
 async def video_feed():
     return StreamingResponse(
-        generate_video_stream(), 
+        generate_video_stream(),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
@@ -183,3 +186,37 @@ async def websocket_telemetry(websocket: WebSocket):
             await asyncio.sleep(0.033)  # 30Hz
     except WebSocketDisconnect:
         connected_websockets.remove(websocket)
+
+# ================== 4. DB 로그 조회 API ==================
+@app.get("/api/db/logs")
+async def get_db_logs():
+    """PyQt LogViewerDialog와 동일하게 3개 테이블의 최근 기록 반환"""
+    if not db_connected or db is None:
+        return {
+            "status": "error",
+            "message": "로컬 DB 미연결 상태입니다.",
+            "data": {"alerts": [], "orders": [], "order_logs": []}
+        }
+    try:
+        alert_logs = db.fetch_recent_alerts(limit=100)
+        order_logs = db.fetch_recent_orders(limit=50)
+        order_detail_logs = db.fetch_recent_order_logs(limit=100)
+
+        payload = {
+            "alerts": alert_logs or [],
+            "orders": order_logs or [],
+            "order_logs": order_detail_logs or []
+        }
+        
+        # datetime, decimal, None 등 MySQL 특수 객체를 일괄 JSON 직렬화 변환
+        return {
+            "status": "success",
+            "data": jsonable_encoder(payload)
+        }
+    except Exception as e:
+        print(f"[API ERROR] /api/db/logs 조회 중 오류: {e}")
+        return {
+            "status": "error",
+            "message": f"DB 조회 실패: {str(e)}",
+            "data": {"alerts": [], "orders": [], "order_logs": []}
+        }

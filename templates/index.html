@@ -30,10 +30,25 @@
         .chip-green { background: #233b2e; color: #a6da95; border: 1px solid #325942; }
         .chip-yellow { background: #3d3725; color: #eed49f; border: 1px solid #5d5332; }
 
-        /* 상태 뱃지 */
-        .status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+        /* 상태 뱃지 & DB 로그 버튼 */
+        .status-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
         .status-badge { flex: 1; background-color: #1e3a2f; color: #a6da95; border: 1px solid #2e5e47; font-weight: bold; font-size: 12px; border-radius: 6px; padding: 6px 10px; text-align: center; }
         .status-alert { background-color: #3e1f2b; color: #ed8796; border: 1px solid #6e2d3b; }
+
+        .btn-db-log {
+            width: 100%;
+            background-color: #181926;
+            color: #a5adcb;
+            font-weight: bold;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 7px 12px;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+        .btn-db-log:hover { background-color: #1e2030; color: #ffffff; border: 1px solid #ffffff; }
 
         /* 텔레메트리 그리드 */
         .telemetry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
@@ -41,54 +56,108 @@
 
         /* 그래프 영역 */
         .chart-box { height: 210px; position: relative; }
+
+        /* DB 모달 (LogViewerDialog) */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.75);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content {
+            background-color: #181926; border: 1px solid #313244; border-radius: 12px;
+            width: 90%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; padding: 18px;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .modal-close { background: none; border: none; color: #ed8796; font-size: 20px; font-weight: bold; cursor: pointer; }
+        
+        .tab-buttons { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid #2b2f46; padding-bottom: 8px; }
+        .tab-btn {
+            background: none; border: none; color: #a5adcb; font-size: 13px; font-weight: bold; padding: 6px 12px;
+            border-radius: 6px; cursor: pointer; transition: all 0.2s;
+        }
+        .tab-btn.active { background-color: #313244; color: #5cffd1; }
+        
+        .tab-content { flex: 1; overflow-y: auto; }
+        .db-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+        .db-table th { background-color: #1e2030; color: #5cffd1; padding: 8px; border-bottom: 1px solid #313244; position: sticky; top: 0; }
+        .db-table td { padding: 8px; border-bottom: 1px solid #24273a; color: #cad3f5; }
+        .db-table tr:hover { background-color: #1e2030; }
     </style>
 </head>
 <body>
     <div class="main-container">
-        <!-- 좌측 컬럼 -->
+        <!-- ================= 좌측 컬럼 ================= -->
         <div class="col">
+            <!-- 1. 비디오 스트림 -->
             <div class="card">
                 <div class="viewport-box">
                     <img src="/video_feed" alt="Connecting to ESP32-CAM..." onerror="this.src=''; this.alt='ESP32-CAM 연결 대기 중...'">
                 </div>
             </div>
 
+            <!-- 2. AI 적재물 & 텔레메트리 -->
             <div class="card">
-                <div class="title">📦 AI 적재물 검수 (FOMO)</div>
+                <div class="title" id="lbl_ai_title">📦 AI 적재물 검수 (FOMO)</div>
                 <div class="ai-chips">
                     <div class="chip chip-red" id="lbl_red">RED LED : 0 개</div>
                     <div class="chip chip-green" id="lbl_green">GREEN LED : 0 개</div>
                     <div class="chip chip-yellow" id="lbl_yellow">YELLOW LED : 0 개</div>
                 </div>
 
-                <div class="title">⚡ 차량 텔레메트리 및 센서 상태</div>
+                <div class="title" id="lbl_sensor_title">⚡ 차량 텔레메트리 및 센서 상태</div>
                 <div class="status-row">
                     <div class="status-badge" id="lbl_status">상태 : NORMAL (정상 주행)</div>
                 </div>
+
+                <!-- DB 로그 팝업 버튼 -->
+                <button class="btn-db-log" id="btn_db_log" onclick="openDbModal()">📊 DB 로그 기록 뷰어 열기</button>
 
                 <div class="telemetry-grid">
                     <div class="metric-box" id="lbl_yaw">• 회전값(Yaw) : 0.0 °</div>
                     <div class="metric-box" id="lbl_speed">• 속도 : 0.0 m/s</div>
                     <div class="metric-box" id="lbl_tilt">• 앞뒤 기울기 : 0.0 °</div>
                     <div class="metric-box" id="lbl_tilt_side">• 옆기울기 : 0.0 °</div>
-                    <div class="metric-box" id="lbl_dist">• 장애물 거리 : 0 cm</div>
-                    <div class="metric-box" id="lbl_g">• 충격량(G) : 1.00 G</div>
+                    <div class="metric-box" id="lbl_dist">• 초음파 거리 : 0 cm</div>
+                    <div class="metric-box" id="lbl_g">• 가속도(G) : 1.00 G</div>
                 </div>
             </div>
         </div>
 
-        <!-- 우측 컬럼 -->
+        <!-- ================= 우측 컬럼 ================= -->
         <div class="col">
+            <!-- 1. 3D 카트 자세 뷰어 -->
             <div class="card">
-                <div class="title">🚗 실시간 3D 카트 자세 모니터링</div>
+                <div class="title" id="lbl_3d_title">🚗 실시간 3D 카트 자세 모니터링</div>
                 <div class="viewport-box" id="container3d"></div>
             </div>
 
+            <!-- 2. 2D IMU 추이 그래프 -->
             <div class="card">
-                <div class="title">📈 실시간 자세 추이 (Pitch / Roll)</div>
+                <div class="title" id="lbl_graph_title">📈 실시간 자세 추이 (Pitch / Roll)</div>
                 <div class="chart-box">
                     <canvas id="imuChart"></canvas>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= DB 로그 뷰어 모달 ================= -->
+    <div class="modal-overlay" id="dbModal" onclick="closeDbModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="title" style="margin: 0; font-size: 15px;">🗄️ 데이터베이스 로그 뷰어 (CartDB Viewer)</span>
+                <button class="modal-close" onclick="closeDbModal()">✕</button>
+            </div>
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchTab('alerts')">🚨 주행 이상 알림 (Alerts)</button>
+                <button class="tab-btn" onclick="switchTab('orders')">📦 배송 주문 목록 (Orders)</button>
+                <button class="tab-btn" onclick="switchTab('order_logs')">📝 실시간 변화 로그 (Order Logs)</button>
+            </div>
+            <div class="tab-content" id="tabContent">
+                <table class="db-table" id="dbTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -133,7 +202,7 @@
         // 카트 그룹
         const cartGroup = new THREE.Group();
 
-        // 카트 본체
+        // 본체
         const bodyGeo = new THREE.BoxGeometry(4.0, 1.2, 2.4);
         const bodyMat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(0.23, 0.51, 0.96),
@@ -150,7 +219,7 @@
         bodyMesh.add(bodyEdges);
         cartGroup.add(bodyMesh);
 
-        // 전방 헤드포인트
+        // 헤드포인트
         const headGeo = new THREE.BoxGeometry(0.5, 0.4, 1.2);
         const headMat = new THREE.MeshStandardMaterial({
             color: new THREE.Color(0.65, 0.85, 0.58),
@@ -227,40 +296,28 @@
             }
         });
 
-        // ================== 3. WebSocket 실시간 연동 (ngrok wss 지원) ==================
+        // ================== 3. WebSocket 실시간 연동 ==================
         const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${location.host}/ws/telemetry`;
-        console.log(`[WS] Connecting to: ${wsUrl}`);
-        
         const ws = new WebSocket(wsUrl);
-
-        ws.onopen = () => {
-            console.log("[WS] Telemetry WebSocket Connected.");
-        };
-
-        ws.onerror = (err) => {
-            console.error("[WS] Error:", err);
-        };
 
         ws.onmessage = (event) => {
             try {
                 const d = JSON.parse(event.data);
 
-                // 수치 업데이트
                 document.getElementById('lbl_yaw').innerText = `• 회전값(Yaw) : ${d.yaw.toFixed(1)} °`;
+                document.getElementById('lbl_speed').innerText = `• 속도 : ${d.speed ? d.speed.toFixed(1) : '0.0'} m/s`;
                 document.getElementById('lbl_tilt').innerText = `• 앞뒤 기울기 : ${d.pitch.toFixed(1)} °`;
                 document.getElementById('lbl_tilt_side').innerText = `• 옆기울기 : ${d.roll.toFixed(1)} °`;
-                document.getElementById('lbl_dist').innerText = `• 장애물 거리 : ${d.distance} cm`;
-                document.getElementById('lbl_g').innerText = `• 충격량(G) : ${d.g_val.toFixed(2)} G`;
+                document.getElementById('lbl_dist').innerText = `• 초음파 거리 : ${d.distance} cm`;
+                document.getElementById('lbl_g').innerText = `• 가속도(G) : ${d.g_val.toFixed(2)} G`;
 
-                // AI LED 검수 수치 업데이트
                 if (d.led_counts) {
                     document.getElementById('lbl_red').innerText = `RED LED : ${d.led_counts.r1 || 0} 개`;
                     document.getElementById('lbl_green').innerText = `GREEN LED : ${d.led_counts.g1 || 0} 개`;
                     document.getElementById('lbl_yellow').innerText = `YELLOW LED : ${d.led_counts.y1 || 0} 개`;
                 }
 
-                // 상태 뱃지
                 const statusBadge = document.getElementById('lbl_status');
                 if (d.status === "NORMAL") {
                     statusBadge.innerText = "상태 : NORMAL (정상 주행)";
@@ -270,23 +327,133 @@
                     statusBadge.className = "status-badge status-alert";
                 }
 
-                // 3D 카트 회전 변환
                 const rad = Math.PI / 180;
                 cartGroup.rotation.order = 'ZYX';
                 cartGroup.rotation.y = -d.yaw * rad;
                 cartGroup.rotation.z = d.pitch * rad;
                 cartGroup.rotation.x = -d.roll * rad;
 
-                // 2D 차트 갱신
                 chart.data.datasets[0].data.push(d.pitch);
                 chart.data.datasets[0].data.shift();
                 chart.data.datasets[1].data.push(d.roll);
                 chart.data.datasets[1].data.shift();
                 chart.update();
             } catch (e) {
-                console.error("[WS] Data parse error:", e);
+                console.error("[WS] Parse error:", e);
             }
         };
+
+        // ================== 4. DB 로그 뷰어 모달 제어 ==================
+        let cachedDbData = { alerts: [], orders: [], order_logs: [] };
+        let currentTab = 'alerts';
+
+        function formatDate(dt) {
+            if (!dt) return '-';
+            return String(dt).replace('T', ' ');
+        }
+
+        async function openDbModal() {
+            document.getElementById('dbModal').style.display = 'flex';
+            document.getElementById('tableHead').innerHTML = '';
+            document.getElementById('tableBody').innerHTML = `<tr><td style="text-align: center; color: #89b4fa; padding: 20px;">DB에서 데이터를 조회하는 중...</td></tr>`;
+
+            try {
+                const res = await fetch('/api/db/logs');
+                const result = await res.json();
+                if (result.status === 'success') {
+                    cachedDbData = result.data || { alerts: [], orders: [], order_logs: [] };
+                    renderTable(currentTab);
+                } else {
+                    document.getElementById('tableBody').innerHTML = `<tr><td style="text-align: center; color: #ed8796; padding: 20px;">${result.message || '데이터를 불러오지 못했습니다.'}</td></tr>`;
+                }
+            } catch (err) {
+                console.error("DB Fetch Error:", err);
+                document.getElementById('tableBody').innerHTML = `<tr><td style="text-align: center; color: #ed8796; padding: 20px;">서버 통신 실패</td></tr>`;
+            }
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
+                btn.classList.toggle('active', 
+                    (tabName === 'alerts' && idx === 0) || 
+                    (tabName === 'orders' && idx === 1) || 
+                    (tabName === 'order_logs' && idx === 2)
+                );
+            });
+            renderTable(tabName);
+        }
+
+        function renderTable(tabName) {
+            const thead = document.getElementById('tableHead');
+            const tbody = document.getElementById('tableBody');
+            const data = (cachedDbData && cachedDbData[tabName]) ? cachedDbData[tabName] : [];
+
+            if (!Array.isArray(data) || data.length === 0) {
+                thead.innerHTML = '';
+                tbody.innerHTML = `<tr><td style="text-align: center; color: #6c7086; padding: 20px;">기록된 데이터가 없습니다.</td></tr>`;
+                return;
+            }
+
+            if (tabName === 'alerts') {
+                thead.innerHTML = `
+                    <tr>
+                        <th>ID</th><th>경고 유형</th><th>Pitch(°)</th><th>Roll(°)</th><th>가속도(G)</th><th>거리(cm)</th><th>기록 일시</th>
+                    </tr>
+                `;
+                tbody.innerHTML = data.map(r => `
+                    <tr>
+                        <td>${r.log_id}</td>
+                        <td><span style="color:#ed8796; font-weight:bold;">${r.warning_type || 'ALERT'}</span></td>
+                        <td>${r.pitch !== undefined && r.pitch !== null ? r.pitch : '-'}</td>
+                        <td>${r.roll !== undefined && r.roll !== null ? r.roll : '-'}</td>
+                        <td>${r.g_force !== undefined && r.g_force !== null ? r.g_force : '-'}</td>
+                        <td>${r.ultrasonic_distance !== undefined && r.ultrasonic_distance !== null ? r.ultrasonic_distance : '-'}</td>
+                        <td>${formatDate(r.created_at)}</td>
+                    </tr>
+                `).join('');
+            } else if (tabName === 'orders') {
+                thead.innerHTML = `
+                    <tr>
+                        <th>Order ID</th><th>시작 적재 (R/G/Y)</th><th>도착 적재 (R/G/Y)</th><th>상태</th><th>시작 일시</th><th>종료 일시</th>
+                    </tr>
+                `;
+                tbody.innerHTML = data.map(r => {
+                    const isCompleted = r.status === 'COMPLETED';
+                    const isMissing = r.status === 'MISSING';
+                    const statusColor = isCompleted ? '#a6da95' : (isMissing ? '#ed8796' : '#eed49f');
+                    
+                    return `
+                        <tr>
+                            <td>${r.order_id}</td>
+                            <td>${r.start_red ?? 0} / ${r.start_green ?? 0} / ${r.start_yellow ?? 0}</td>
+                            <td>${r.end_red !== null && r.end_red !== undefined ? r.end_red : '-'} / ${r.end_green !== null && r.end_green !== undefined ? r.end_green : '-'} / ${r.end_yellow !== null && r.end_yellow !== undefined ? r.end_yellow : '-'}</td>
+                            <td><span style="color:${statusColor}; font-weight:bold;">${r.status}</span></td>
+                            <td>${formatDate(r.start_time)}</td>
+                            <td>${formatDate(r.end_time)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } else if (tabName === 'order_logs') {
+                thead.innerHTML = `
+                    <tr>
+                        <th>Log ID</th><th>Order ID</th><th>적재 상태 (Red / Green / Yellow)</th><th>기록 일시</th>
+                    </tr>
+                `;
+                tbody.innerHTML = data.map(r => `
+                    <tr>
+                        <td>${r.log_id}</td>
+                        <td>${r.order_id}</td>
+                        <td>${r.red_count ?? 0} / ${r.green_count ?? 0} / ${r.yellow_count ?? 0}</td>
+                        <td>${formatDate(r.created_at)}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function closeDbModal(e) {
+            document.getElementById('dbModal').style.display = 'none';
+        }
     </script>
 </body>
 </html>
