@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
+#include <LiquidCrystal_I2C.h>
 
 // ==================================================
 // 블루투스 (HC-06)
@@ -9,6 +10,14 @@ SoftwareSerial espSerial(8, 12);
 
 // UNO RX(D2) = HC-06 TX
 // UNO TX(D3) = HC-06 RX
+
+// ==================================================
+// [I2C LCD]
+// ==================================================
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // 주소, 열 16, 행 2 (모듈 사이즈에 맞게 수정)
+
+String prev_cart_status = "";        // 이전 상태 저장용 (변경 시에만 갱신)
+int prev_driving_state = -1;         // 이전 상태 저장용 (변경 시에만 갱신)
 
 // ==================================================
 // [IMU MPU6050 상수]
@@ -40,9 +49,9 @@ unsigned long last_send_time = 0;                         // 마지막 패킷 �
 // ==================================================
 // 차량 제어 관련 변수 및 상수
 // ==================================================
-const float YAW_KP = 8.5;             // 5.0 -> 8.5 (오차 대응 반응속도 향상)
-const float YAW_DEADBAND = 0.5;       // 1.0 -> 0.5 (미세한 틀어짐부터 빠른 개입)
-const int MAX_YAW_CORRECTION = 90;   // 60 -> 90 (모터 출력차 상한 확대)
+const float YAW_KP = 12.0;            // 8.5 -> 12.0 (오차 반응 강화)
+const float YAW_DEADBAND = 0.2;       // 0.5 -> 0.2 (더 좁은 오차부터 보정 시작)
+const int MAX_YAW_CORRECTION = 110;   // 90 -> 110 (게인 상승분 커버)
 
 // ==================================================
 // 모터 핀
@@ -64,11 +73,10 @@ bool obstacle_stop = false;
 // ==================================================
 // 속도 설정
 // ==================================================
-// 처음 출발할 때 속도
-const int START_SPEED = 150;
-const int MIN_SPEED = 80;
-const int MAX_SPEED = 255;
-const int ACCEL_STEP = 20;
+const int START_SPEED = 120;
+const int MIN_SPEED = 70;
+const int MAX_SPEED = 200;
+const int ACCEL_STEP = 10;
 const int DECEL_STEP = 10;
 const unsigned long DECEL_INTERVAL = 50;
 int speed = 0;
@@ -78,12 +86,11 @@ int speed = 0;
 // ==================================================
 enum Motion { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 Motion current_motion = STOP;
-int driving_state = 0;                                  // 중요: 버튼 할당하고 배송 시작과 끝 상태 변수 수정 필요
+int driving_state = 0;
 
 // ==================================================
 // 방향 전환 상태
 // ==================================================
-// 현재 방향을 유지하면서 자동 감속 중인지
 bool changing_direction = false;
 Motion next_motion = STOP;
 unsigned long last_decel_time = 0;
@@ -99,7 +106,6 @@ void calibrate_imu() {
     Wire.endTransmission(false);
     Wire.requestFrom(MPU_ADDR, 6, true);
     
-    // I2C 통신 문제로 2번 쪼개진 통신을 16바이트로 합치기
     sum_gx += (Wire.read() << 8 | Wire.read());
     sum_gy += (Wire.read() << 8 | Wire.read());
     sum_gz += (Wire.read() << 8 | Wire.read());
@@ -123,7 +129,7 @@ void read_and_filter_imu() {
   raw_ax = (Wire.read() << 8 | Wire.read());
   raw_ay = (Wire.read() << 8 | Wire.read());
   raw_az = (Wire.read() << 8 | Wire.read());
-  Wire.read(); Wire.read(); // 온도 무시
+  Wire.read(); Wire.read();
   raw_gx = (Wire.read() << 8 | Wire.read());
   raw_gy = (Wire.read() << 8 | Wire.read());
   raw_gz = (Wire.read() << 8 | Wire.read());
@@ -132,7 +138,6 @@ void read_and_filter_imu() {
   float ay = (float)raw_ay / 8192.0;
   float az = (float)raw_az / 8192.0;
 
-  // 영점 오프셋을 빼고 각속도 변환
   float gx_rate = ((float)raw_gx - offset_gx) / 65.5;
   float gy_rate = ((float)raw_gy - offset_gy) / 65.5;
   float gz_rate = ((float)raw_gz - offset_gz) / 65.5;
@@ -140,18 +145,15 @@ void read_and_filter_imu() {
   if (abs(gz_rate) < 0.5) gz_rate = 0.0;
   yaw_angle += gz_rate * dt;
 
-  // Yaw 각도 360도 보정
   if (yaw_angle > 180.0) yaw_angle -= 360.0;
   if (yaw_angle < -180.0) yaw_angle += 360.0;
 
-  // 가속도 센서를 이용한 정적 각도 계산
   float accel_pitch = atan2(ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
   float accel_roll = atan2(ay, sqrt(ax * ax + az * az)) * 180.0 / PI;
 
-  // 상보 필터
-  pitch_angle = 0.96 * (pitch_angle - gy_rate * dt) + 0.04 * accel_pitch;      // 0.96 * (이전각도 + 자이로변화량) + 0.04 * (가속도계 각도)
+  pitch_angle = 0.96 * (pitch_angle - gy_rate * dt) + 0.04 * accel_pitch;
   roll_angle = 0.96 * (roll_angle + gx_rate * dt) + 0.04 * accel_roll;
-  total_g = sqrt(ax * ax + ay * ay + az * az);                                // 충격량
+  total_g = sqrt(ax * ax + ay * ay + az * az);
 }
 
 void check_safety_status() {
@@ -169,10 +171,40 @@ void check_safety_status() {
 }
 
 // ==========================================
+// [LCD 1행 상태 메시지 출력 함수 - setup 단계용]
+// ==========================================
+void lcd_show_stage(String msg) {
+  lcd.setCursor(0, 0);
+  lcd.print("                ");  // 1행 지우기
+  lcd.setCursor(0, 0);
+  lcd.print(msg);
+}
+
+// ==========================================
+// [LCD 상태 표시 함수 - 평소 운행 중]
+// ==========================================
+void update_lcd() {
+  if (cart_status != prev_cart_status) {
+    lcd.setCursor(0, 0);
+    lcd.print("                ");
+    lcd.setCursor(0, 0);
+    lcd.print("Status: " + cart_status);
+    prev_cart_status = cart_status;
+  }
+
+  if (driving_state != prev_driving_state) {
+    lcd.setCursor(0, 1);
+    lcd.print("                ");
+    lcd.setCursor(0, 1);
+    lcd.print("Driving: " + String(driving_state));
+    prev_driving_state = driving_state;
+  }
+}
+
+// ==========================================
 // [AT 명령어를 통한 UDP 패킷 전송 함수]
 // ==========================================
 void send_cart_packet() {
-  // 5가지 데이터를 쉼표로 연결
   String packet = "car," +
                   String(yaw_angle, 1) + "," + 
                   String(pitch_angle, 1) + "," + 
@@ -182,8 +214,8 @@ void send_cart_packet() {
                   String(distance) + "," +
                   String(driving_state);
 
-  // ESP-01로 단순 전송 (끝에 줄바꿈 \n 포함)
   espSerial.println(packet);
+  Serial.println(packet);
 }
 
 // ==================================================
@@ -194,7 +226,6 @@ int get_distance()
   digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
-  // 10000us (약 1.7m) 타임아웃으로 지연 현상 방지
   long duration = pulseIn(ECHO_PIN, HIGH, 10000);
   if (duration == 0) return -1;
   return duration * 0.034 / 2;
@@ -362,7 +393,6 @@ void setup()
   espSerial.begin(19200);
   btSerial.begin(9600);
   
-  // 핀 초기화
   pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT); pinMode(ECHO_PIN, INPUT);
@@ -372,14 +402,22 @@ void setup()
   Serial.println("차량 시스템 시작");
   Serial.println("=================================");
 
-  Serial.println("MPU6050 통신 시도 중...");
+  // ==================================================
+  // LCD 초기화 (가장 먼저 실행, 1행만 사용)
+  // ==================================================
   Wire.begin();
+  lcd.init();
+  lcd.backlight();
+
+  Serial.println("MPU6050 통신 시도 중...");
+  lcd_show_stage("MPU Connecting");
   Wire.beginTransmission(MPU_ADDR);
 
   byte error = Wire.endTransmission();
   if (error == 0) {
     mpu_available = true;
     Serial.println("MPU6050 : 연결됨, 캘리브레이션 시작...");
+    lcd_show_stage("MPU Calibrating");
     Wire.beginTransmission(MPU_ADDR); Wire.write(0x6B); Wire.write(0x00); Wire.endTransmission();
     Wire.beginTransmission(MPU_ADDR); Wire.write(0x1C); Wire.write(0x08); Wire.endTransmission();
     Wire.beginTransmission(MPU_ADDR); Wire.write(0x1B); Wire.write(0x08); Wire.endTransmission();
@@ -387,18 +425,21 @@ void setup()
     calibrate_imu();
     prev_time = millis();
     Serial.println("MPU6050 : 준비 완료");
+    lcd_show_stage("MPU Ready");
   } else {
     Serial.println("MPU6050 : 연결 실패 (코드: " + String(error) + ")");
+    lcd_show_stage("MPU Fail");
   }
 
   // ==================================================
   // ESP-01 스마트 대기 및 핸드쉐이크 로직
   // ==================================================
   Serial.println("\nESP-01 Wi-Fi 설정 시도 중...");
+  lcd_show_stage("WiFi Connecting");
   
-  espSerial.listen(); // ESP의 응답을 듣기 위해 수신 활성화
+  espSerial.listen();
   delay(2000); 
-  espSerial.println("CONFIG,3F_302,0424719222!!,192.168.0.164");
+  espSerial.println("CONFIG,3F_302,0424719222!!,192.168.0.93");
 
   bool wifi_connected = false;
   unsigned long start_wait = millis();
@@ -408,7 +449,6 @@ void setup()
       String response = espSerial.readStringUntil('\n');
       response.trim();
       
-      // 포맷 파싱: OK,와이파이이름,PC아이피
       if (response.startsWith("OK,")) {
         int first_comma = response.indexOf(',');
         int second_comma = response.indexOf(',', first_comma + 1);
@@ -422,10 +462,17 @@ void setup()
         Serial.println(" [설정] PC IP : " + pc_ip);
         Serial.println("=================================");
         wifi_connected = true;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("WiFi:" + connected_ssid);
+        lcd.setCursor(0, 1);
+        lcd.print(pc_ip);
+        delay(2000);
         break; 
       } 
       else if (response == "FAIL") {
         Serial.println(" [실패] Wi-Fi 연결 실패");
+        lcd_show_stage("WiFi Failed");
         break;
       }
     }
@@ -433,11 +480,27 @@ void setup()
 
   if (!wifi_connected) {
     Serial.println(" [오류] ESP-01 응답 없음");
+    lcd_show_stage("WiFi Timeout");
   }
 
   btSerial.listen();
   Serial.println("HC-06 : READY");
   Serial.println("차량 READY\n");
+  lcd.clear();
+  lcd_show_stage("Cart Ready");
+  delay(1000);   // "Cart Ready" 문구를 잠깐 보여준 뒤 전환
+
+  // ==================================================
+  // 여기서부터 평소 운행 화면(Status/Driving)으로 전환
+  // 연결 성공/실패 여부와 무관하게 확인 절차가 끝나면 전환됨
+  // ==================================================
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Status: NORMAL");
+  lcd.setCursor(0, 1);
+  lcd.print("Driving: 0");
+  prev_cart_status = "NORMAL";
+  prev_driving_state = 0;
 }
 
 // ==================================================
@@ -447,10 +510,10 @@ void loop()
 {
   unsigned long current_time = millis();
 
-  // MPU6050 업데이트
   if (mpu_available) {
-    read_and_filter_imu(); // yaw_angle 지속 갱신
+    read_and_filter_imu();
     check_safety_status();
+    update_lcd();
   }
 
   if (current_time - last_send_time >= PACKET_INTERVAL_MS) {
@@ -458,7 +521,6 @@ void loop()
     last_send_time = current_time;
   }
 
-  // 초음파 측정
   if (current_time - last_ultrasonic_time >= ULTRASONIC_INTERVAL) {
     last_ultrasonic_time = current_time;
     distance = get_distance();
@@ -470,15 +532,16 @@ void loop()
     }
   }
 
-  // 블루투스 명령
   if (btSerial.available()) {
     String cmd = btSerial.readStringUntil('\n');
     cmd.trim();
     if (cmd == "A" || cmd == "a" || cmd == "A0") {
       driving_state = 1;
+      update_lcd();
     }
     else if (cmd == "P" || cmd == "p" || cmd == "P0") {
       driving_state = 0;
+      update_lcd();
     }
     else if (cmd == "F" || cmd == "f" || cmd == "F0") {
       if (obstacle_stop) stop_motor(); else handle_forward_command();
@@ -489,10 +552,8 @@ void loop()
     else if (cmd == "X" || cmd == "x" || cmd == "X0") stop_motor();
   }
 
-  // 전진 ↔ 후진 자동 감속 처리
   update_direction_change();
 
-  // MPU6050 직진 보정
   if (mpu_available && current_motion == FORWARD && speed > 0 && !changing_direction && !obstacle_stop)
   {
     correct_forward_direction();
