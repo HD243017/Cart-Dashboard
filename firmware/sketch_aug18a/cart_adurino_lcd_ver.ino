@@ -439,7 +439,7 @@ void setup()
   
   espSerial.listen();
   delay(2000); 
-  espSerial.println("CONFIG,3F_302,0424719222!!,192.168.0.164");
+  espSerial.println("CONFIG,3F_302,0424719222!!,192.168.0.93");
 
   bool wifi_connected = false;
   unsigned long start_wait = millis();
@@ -462,7 +462,12 @@ void setup()
         Serial.println(" [설정] PC IP : " + pc_ip);
         Serial.println("=================================");
         wifi_connected = true;
-        lcd_show_stage("WiFi Connected");
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("WiFi:" + connected_ssid);
+        lcd.setCursor(0, 1);
+        lcd.print(pc_ip);
+        delay(2000);
         break; 
       } 
       else if (response == "FAIL") {
@@ -481,6 +486,7 @@ void setup()
   btSerial.listen();
   Serial.println("HC-06 : READY");
   Serial.println("차량 READY\n");
+  lcd.clear();
   lcd_show_stage("Cart Ready");
   delay(1000);   // "Cart Ready" 문구를 잠깐 보여준 뒤 전환
 
