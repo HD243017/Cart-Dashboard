@@ -25,7 +25,7 @@ int prev_driving_state = -1;         // 이전 상태 저장용 (변경 시에�
 const int MPU_ADDR = 0x68;
 const float LIMIT_SHOCK_G = 2.5;             // 충격 판정 기준 2.5g
 const float LIMIT_SLOPE_DEG = 25.0;          // 경사로 판정 기준 25도
-const unsigned long PACKET_INTERVAL_MS = 100; // PC 데이터 전송 주기 (50ms)
+const unsigned long PACKET_INTERVAL_MS = 100; // PC 데이터 전송 주기 (100ms)
 
 // ==========================================
 // [IMU 변수]
@@ -40,8 +40,8 @@ float yaw_angle = 0.0;                                    // 회전값
 float total_g = 1.0;                                      // 충격 벡터
 String cart_status = "NORMAL";                            // 차량 상태
 
-bool mpu_available = false; // IMU 연결 상태 확인용 변수 추가
-float target_yaw = 0.0;     // 직진 보정용 목표 Yaw 각도 추가
+bool mpu_available = false; // IMU 연결 상태 확인용 변수
+float target_yaw = 0.0;     // 직진 보정용 목표 Yaw 각도
 
 unsigned long prev_time = 0;                              // 상보필터 계산에 필요한 이전 루프가 실행된 시간 
 unsigned long last_send_time = 0;                         // 마지막 패킷 전송 시간 (비동기식 제어)
@@ -52,6 +52,14 @@ unsigned long last_send_time = 0;                         // 마지막 패킷 �
 const float YAW_KP = 12.0;            // 8.5 -> 12.0 (오차 반응 강화)
 const float YAW_DEADBAND = 0.2;       // 0.5 -> 0.2 (더 좁은 오차부터 보정 시작)
 const int MAX_YAW_CORRECTION = 110;   // 90 -> 110 (게인 상승분 커버)
+
+// ==================================================
+// 90도 회전 제어 변수
+// ==================================================
+const float TURN_ANGLE = 90.0;         // 1회 회전 각도
+const float TURN_YAW_TOLERANCE = 3.0;  // 목표 각도 도달 판정 오차범위
+bool turning_active = false;           // 현재 90도 회전 중인지 여부
+float turn_target_yaw = 0.0;           // 회전 목표 yaw 값
 
 // ==================================================
 // 모터 핀
@@ -171,7 +179,7 @@ void check_safety_status() {
 }
 
 // ==========================================
-// [LCD 1행 상태 메시지 출력 함수 - setup 단계용]
+// [LCD 1행 상태 메시지 출력 함수 - setup 단계용, 가운데 정렬]
 // ==========================================
 void lcd_show_stage(String msg) {
   lcd.setCursor(0, 0);
@@ -182,8 +190,8 @@ void lcd_show_stage(String msg) {
   int startCol = (16 - len) / 2;
   if (startCol < 0) startCol = 0;
 
-  lcd.setCursor(0, 0);
-  lcd.print(msg);
+  lcd.setCursor(startCol, 0);
+  lcd.print(msg.substring(0, len));
 }
 
 // ==========================================
@@ -290,6 +298,7 @@ void stop_motor() {
   digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
   current_motion = STOP; speed = 0; changing_direction = false; next_motion = STOP;
+  turning_active = false;   // 90도 회전 상태도 함께 해제
 }
 void stop_motor_without_reset() {
   analogWrite(ENA, 0); analogWrite(ENB, 0);
@@ -340,6 +349,22 @@ void update_direction_change()
 }
 
 // ==================================================
+// 90도 회전 완료 체크 (yaw 각도 기준)
+// ==================================================
+void update_turn()
+{
+  if (!turning_active) return;
+
+  float diff = turn_target_yaw - yaw_angle;
+  if (diff > 180.0) diff -= 360.0;
+  if (diff < -180.0) diff += 360.0;
+
+  if (abs(diff) < TURN_YAW_TOLERANCE) {
+    stop_motor();   // 내부에서 turning_active = false 처리됨
+  }
+}
+
+// ==================================================
 // F0 처리
 // ==================================================
 void handle_forward_command() {
@@ -377,16 +402,36 @@ void handle_backward_command() {
   backward();
 }
 
+// ==================================================
+// L0 / R0 처리 - 90도 회전 후 자동 정지
+// ==================================================
 void handle_left_command() {
+  if (turning_active) return;   // 회전 중에는 새 회전 명령 무시
   changing_direction = false;
   current_motion = LEFT;
   speed = START_SPEED;
+
+  if (mpu_available) {
+    turn_target_yaw = yaw_angle + TURN_ANGLE;
+    if (turn_target_yaw < -180.0) turn_target_yaw += 360.0;
+    if (turn_target_yaw > 180.0) turn_target_yaw -= 360.0;
+    turning_active = true;
+  }
   left();
 }
+
 void handle_right_command() {
+  if (turning_active) return;
   changing_direction = false;
   current_motion = RIGHT;
   speed = START_SPEED;
+
+  if (mpu_available) {
+    turn_target_yaw = yaw_angle - TURN_ANGLE;
+    if (turn_target_yaw < -180.0) turn_target_yaw += 360.0;
+    if (turn_target_yaw > 180.0) turn_target_yaw -= 360.0;
+    turning_active = true;
+  }
   right();
 }
 
@@ -469,9 +514,12 @@ void setup()
         Serial.println("=================================");
         wifi_connected = true;
 
+        // ==================================================
+        // SSID(1행) + IP(2행) 동시 표시, 가운데 정렬
+        // ==================================================
         lcd.clear();
 
-        String ssidMsg = "WiFi : " + connected_ssid;
+        String ssidMsg = "WiFi:" + connected_ssid;
         if (ssidMsg.length() > 16) ssidMsg = ssidMsg.substring(0, 16);
         int ssidCol = (16 - ssidMsg.length()) / 2;
         lcd.setCursor(ssidCol, 0);
@@ -502,9 +550,10 @@ void setup()
   btSerial.listen();
   Serial.println("HC-06 : READY");
   Serial.println("차량 READY\n");
-  lcd.clear();
-  lcd_show_stage("Cart Ready");
-  delay(1000);   // "Cart Ready" 문구를 잠깐 보여준 뒤 전환
+
+  lcd.clear();                     // 이전 2행 내용(IP 등) 완전히 지우기
+  lcd_show_stage("Cart Ready");    // 가운데 정렬로 1줄만 표시
+  delay(1000);
 
   // ==================================================
   // 여기서부터 평소 운행 화면(Status/Driving)으로 전환
@@ -569,6 +618,10 @@ void loop()
   }
 
   update_direction_change();
+
+  if (mpu_available) {
+    update_turn();   // 90도 회전 목표 각도 도달했는지 매 루프 체크
+  }
 
   if (mpu_available && current_motion == FORWARD && speed > 0 && !changing_direction && !obstacle_stop)
   {
