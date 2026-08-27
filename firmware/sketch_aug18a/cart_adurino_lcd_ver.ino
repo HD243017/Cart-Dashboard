@@ -176,6 +176,12 @@ void check_safety_status() {
 void lcd_show_stage(String msg) {
   lcd.setCursor(0, 0);
   lcd.print("                ");  // 1행 지우기
+
+  int len = msg.length();
+  if (len > 16) len = 16;         // 16자 넘으면 잘라서 표시
+  int startCol = (16 - len) / 2;
+  if (startCol < 0) startCol = 0;
+
   lcd.setCursor(0, 0);
   lcd.print(msg);
 }
@@ -462,11 +468,21 @@ void setup()
         Serial.println(" [설정] PC IP : " + pc_ip);
         Serial.println("=================================");
         wifi_connected = true;
+
         lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("WiFi:" + connected_ssid);
-        lcd.setCursor(0, 1);
-        lcd.print(pc_ip);
+
+        String ssidMsg = "WiFi : " + connected_ssid;
+        if (ssidMsg.length() > 16) ssidMsg = ssidMsg.substring(0, 16);
+        int ssidCol = (16 - ssidMsg.length()) / 2;
+        lcd.setCursor(ssidCol, 0);
+        lcd.print(ssidMsg);
+
+        String ipMsg = pc_ip;
+        if (ipMsg.length() > 16) ipMsg = ipMsg.substring(0, 16);
+        int ipCol = (16 - ipMsg.length()) / 2;
+        lcd.setCursor(ipCol, 1);
+        lcd.print(ipMsg);
+
         delay(2000);
         break; 
       } 
